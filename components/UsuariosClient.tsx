@@ -111,6 +111,7 @@ export default function UsuariosClient({ usuarios: initial }: Props) {
     setTimeout(() => setSuccessMsg(''), 3000)
   }
 
+  const masters = filtered.filter(u => u.perfil === 'master')
   const admins = filtered.filter(u => u.perfil === 'admin')
   const colaboradores = filtered.filter(u => u.perfil === 'usuario')
 
@@ -153,6 +154,22 @@ export default function UsuariosClient({ usuarios: initial }: Props) {
           onChange={e => setSearch(e.target.value)}
         />
       </div>
+
+      {/* Masters */}
+      {masters.length > 0 && (
+        <section style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+            <Shield size={16} color="var(--accent-purple)" />
+            <h2 style={{ fontSize: '14px', fontWeight: '700', color: 'var(--accent-purple)', letterSpacing: '0.05em' }}>
+              DIRECTORIA (MASTERS)
+            </h2>
+            <span className="badge" style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--accent-purple)' }}>{masters.length}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {masters.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} />)}
+          </div>
+        </section>
+      )}
 
       {/* Admins */}
       {admins.length > 0 && (
