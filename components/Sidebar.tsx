@@ -79,6 +79,7 @@ export default function Sidebar({ user }: SidebarProps) {
     { href: '/dashboard/minhas-tarefas?tipo=semanal', icon: Calendar, label: 'Semanais', tipo: 'semanal', isSub: true },
     { href: '/dashboard/minhas-tarefas?tipo=mensal', icon: CalendarDays, label: 'Mensais', tipo: 'mensal', isSub: true },
     { href: '/dashboard/minhas-tarefas?tipo=rotativa', icon: Repeat, label: 'Rotativas', tipo: 'rotativa', isSub: true },
+    { href: '/dashboard/meus-feedbacks', icon: MessageSquare, label: 'Meus Feedbacks' },
     { href: '/dashboard/notificacoes', icon: Bell, label: 'Notificações', badge: notifCount },
   ]
 
