@@ -18,10 +18,12 @@ export default async function DashboardPage() {
       .from('usuarios')
       .select('*')
       .eq('perfil', 'usuario')
+      .eq('admin_id', user.id)
 
     const { data: tarefas } = await supabase
       .from('tarefas')
       .select('*, usuario:usuarios!usuario_id(*)')
+      .eq('criado_por', user.id)
 
     return <AdminDashboard usuarios={usuarios || []} tarefas={tarefas || []} />
   }

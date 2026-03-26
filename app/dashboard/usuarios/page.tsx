@@ -13,6 +13,7 @@ export default async function UsuariosPage() {
   const { data: usuarios } = await supabase
     .from('usuarios')
     .select('*')
+    .or(`id.eq.${user.id},admin_id.eq.${user.id}`)
     .order('perfil', { ascending: false }) // admins first
     .order('nome', { ascending: true })
 

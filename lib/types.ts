@@ -11,6 +11,7 @@ export interface Usuario {
   nome: string
   email: string
   perfil: Perfil
+  admin_id?: string | null
   created_at: string
 }
 

@@ -20,13 +20,14 @@ export default async function FollowUpPage(props: Props) {
   const { data: profile } = await supabase.from('usuarios').select('*').eq('id', user.id).single()
   if (profile?.perfil !== 'admin') redirect('/dashboard')
 
-  const { data: usuarios } = await supabase.from('usuarios').select('id, nome').order('nome')
+  const { data: usuarios } = await supabase.from('usuarios').select('id, nome').eq('admin_id', user.id).order('nome')
 
   const hoje = new Date().toISOString().slice(0, 10)
 
   let query = supabase
     .from('follow_up_log')
-    .select('*, tarefa:tarefas(titulo), usuario:usuarios(nome)')
+    .select('*, tarefa:tarefas!inner(titulo, criado_por), usuario:usuarios(nome)')
+    .eq('tarefa.criado_por', user.id)
     .gte('alterado_em', `${hoje}T00:00:00`)
     .order('alterado_em', { ascending: false })
 
