@@ -321,13 +321,14 @@ export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, 
     : COLUMNS
 
   return (
-    <div style={{ display: 'flex', gap: '20px', overflowX: 'auto', paddingBottom: '20px', minHeight: '60vh' }}>
+    <div className="kanban-board" style={{ display: 'flex', gap: '20px', overflowX: 'auto', paddingBottom: '20px', minHeight: '60vh' }}>
       {visibleColumns.map(col => {
         const colTarefas = tarefas.filter(t => t.status === col.id)
         const isOver = dragOverCol === col.id
         return (
           <div
             key={col.id}
+            className="kanban-col"
             onDragOver={e => { e.preventDefault(); setDragOverCol(col.id as StatusTarefa) }}
             onDragLeave={() => setDragOverCol(null)}
             onDrop={() => handleDrop(col.id as StatusTarefa)}

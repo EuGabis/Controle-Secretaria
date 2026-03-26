@@ -20,7 +20,7 @@ export default async function DashboardLayout({
     .single()
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+    <div className="dashboard-layout" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Sidebar user={profile} />
       <main style={{ flex: 1, overflow: 'auto' }}>
         {children}

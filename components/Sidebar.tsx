@@ -66,7 +66,7 @@ export default function Sidebar({ user }: SidebarProps) {
   const links = isAdmin ? adminLinks : userLinks
 
   return (
-    <aside style={{
+    <aside className="sidebar" style={{
       width: '240px', minWidth: '240px',
       background: 'var(--bg-sidebar)',
       borderRight: '1px solid var(--border)',
@@ -75,7 +75,7 @@ export default function Sidebar({ user }: SidebarProps) {
       position: 'sticky', top: 0, height: '100vh',
     }}>
       {/* Logo */}
-      <div style={{ marginBottom: '32px', paddingLeft: '8px' }}>
+      <div className="sidebar-header" style={{ marginBottom: '32px', paddingLeft: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             width: '36px', height: '36px',
@@ -94,7 +94,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
       {/* Nav Links */}
       <nav style={{ flex: 1 }}>
-        <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: '8px', paddingLeft: '8px' }}>
+        <div className="sidebar-nav-title" style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: '8px', paddingLeft: '8px' }}>
           MENU
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -115,7 +115,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 <Icon size={l.isSub ? 15 : 18} />
                 <span style={{ flex: 1 }}>{label}</span>
                 {badge ? (
-                  <span style={{
+                  <span className="badge-count" style={{
                     background: 'var(--accent-red)',
                     color: 'white',
                     fontSize: '10px',
@@ -137,7 +137,7 @@ export default function Sidebar({ user }: SidebarProps) {
       </nav>
 
       {/* User Card */}
-      <div style={{
+      <div className="sidebar-user-card" style={{
         background: 'rgba(255,255,255,0.04)',
         border: '1px solid var(--border)',
         borderRadius: '12px',
