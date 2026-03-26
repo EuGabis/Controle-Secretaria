@@ -16,9 +16,14 @@ export default async function AdminTarefasPage() {
   else queryUsr = queryUsr.eq('admin_id', user.id)
   const { data: usuarios } = await queryUsr
 
-  let queryT = supabase.from('tarefas').select('*, usuario:usuarios!inner(*)')
-  if (profile?.perfil === 'master') queryT = queryT.eq('usuario.master_id', user.id).order('data_limite', { ascending: true })
-  else queryT = queryT.eq('criado_por', user.id).order('data_limite', { ascending: true })
+  const userIds = usuarios?.map(u => u.id) || []
+  let queryT = supabase.from('tarefas').select('*, usuario:usuarios!usuario_id(*)').order('data_limite', { ascending: true })
+  
+  if (profile?.perfil === 'master') {
+    queryT = queryT.in('usuario_id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'])
+  } else {
+    queryT = queryT.eq('criado_por', user.id)
+  }
   
   const { data: tarefas } = await queryT
 

@@ -23,6 +23,7 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
   const [loading, setSaving] = useState(false)
   const [selectedUser, setSelectedUser] = useState<string>(() => searchParams.get('usuario') ?? 'all')
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>(() => (searchParams.get('status') as StatusFilter) ?? 'all')
+  const [selectedTipo, setSelectedTipo] = useState<string>(() => searchParams.get('tipo') ?? 'all')
   const [form, setForm] = useState({ titulo: '', descricao: '', data_limite: '', usuario_id: '', tipo: 'normal' as TarefaTipo, prioridade: 'media' as PrioridadeTarefa })
   const [createError, setCreateError] = useState('')
   const supabase = createClient()
@@ -31,8 +32,10 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
   useEffect(() => {
     const u = searchParams.get('usuario') ?? 'all'
     const s = (searchParams.get('status') as StatusFilter) ?? 'all'
+    const t = searchParams.get('tipo') ?? 'all'
     setSelectedUser(u)
     setSelectedStatus(s)
+    setSelectedTipo(t)
   }, [searchParams])
 
   const hoje = new Date()
@@ -44,7 +47,8 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
       if (selectedStatus === 'atrasadas') return t.status !== 'feito' && isAfter(hoje, parseISO(t.data_limite))
       return t.status === selectedStatus
     })()
-    return matchUser && matchStatus
+    const matchTipo = selectedTipo === 'all' || t.tipo === selectedTipo || (!t.tipo && selectedTipo === 'normal')
+    return matchUser && matchStatus && matchTipo
   })
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -131,7 +135,7 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
       </div>
 
       {/* Filtro por Status */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
         {statusOptions.map(({ id, label }) => (
           <button
             key={id}
@@ -142,6 +146,32 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
               border: selectedStatus === id ? '1px solid var(--accent-blue)' : '1px solid var(--border)',
               background: selectedStatus === id ? 'rgba(79,124,255,0.15)' : 'transparent',
               color: selectedStatus === id ? 'var(--accent-blue)' : 'var(--text-muted)',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Filtro por Tipo */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
+        {[
+          { id: 'all',      label: 'Todos os Tipos' },
+          { id: 'normal',   label: 'Normal' },
+          { id: 'diaria',   label: 'Diária 🔄' },
+          { id: 'semanal',  label: 'Semanal 📅' },
+          { id: 'mensal',   label: 'Mensal 🗓️' },
+          { id: 'rotativa', label: 'Rotativa 🔁' },
+        ].map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setSelectedTipo(id)}
+            style={{
+              padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '500',
+              cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'Inter, sans-serif',
+              border: selectedTipo === id ? '1px solid var(--accent-purple)' : '1px solid var(--border)',
+              background: selectedTipo === id ? 'rgba(139,92,246,0.15)' : 'transparent',
+              color: selectedTipo === id ? 'var(--accent-purple)' : 'var(--text-muted)',
             }}
           >
             {label}
