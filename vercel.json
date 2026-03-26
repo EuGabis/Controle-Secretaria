@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/reset-tarefas",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}

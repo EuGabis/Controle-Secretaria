@@ -67,12 +67,8 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
         transform: dragging ? 'scale(0.97)' : 'scale(1)',
         transition: 'opacity 0.15s, transform 0.15s',
       }}
-      draggable={!tarefa.tipo || tarefa.tipo === 'normal'}
+      draggable
       onDragStart={e => {
-        if (tarefa.tipo && tarefa.tipo !== 'normal') {
-          e.preventDefault()
-          return
-        }
         setDragging(true)
         onDragStart(tarefa.id)
         e.dataTransfer.effectAllowed = 'move'
@@ -241,7 +237,7 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
           )}
 
           {/* Status buttons (user only) */}
-          {!isAdmin && (!tarefa.tipo || tarefa.tipo === 'normal') && (
+          {!isAdmin && (
             <div style={{ display: 'flex', gap: '4px', marginTop: '10px', flexWrap: 'wrap' }}>
               {COLUMNS.map(col => (
                 <button
