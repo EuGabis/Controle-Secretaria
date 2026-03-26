@@ -18,18 +18,26 @@ export default async function FollowUpPage(props: Props) {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('usuarios').select('*').eq('id', user.id).single()
-  if (profile?.perfil !== 'admin') redirect('/dashboard')
+  if (profile?.perfil !== 'admin' && profile?.perfil !== 'master') redirect('/dashboard')
 
-  const { data: usuarios } = await supabase.from('usuarios').select('id, nome').eq('admin_id', user.id).order('nome')
+  let queryUsr = supabase.from('usuarios').select('id, nome').order('nome')
+  if (profile?.perfil === 'master') queryUsr = queryUsr.eq('master_id', user.id)
+  else queryUsr = queryUsr.eq('admin_id', user.id)
+  const { data: usuarios } = await queryUsr
 
   const hoje = new Date().toISOString().slice(0, 10)
 
   let query = supabase
     .from('follow_up_log')
-    .select('*, tarefa:tarefas!inner(titulo, criado_por), usuario:usuarios(nome)')
-    .eq('tarefa.criado_por', user.id)
+    .select('*, tarefa:tarefas!inner(titulo, criado_por), usuario:usuarios!inner(nome, master_id)')
     .gte('alterado_em', `${hoje}T00:00:00`)
     .order('alterado_em', { ascending: false })
+
+  if (profile?.perfil === 'master') {
+    query = query.eq('usuario.master_id', user.id)
+  } else {
+    query = query.eq('tarefa.criado_por', user.id)
+  }
 
   if (usuarioFiltro) {
     query = query.eq('usuario_id', usuarioFiltro)

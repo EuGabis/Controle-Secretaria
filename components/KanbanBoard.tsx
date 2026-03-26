@@ -45,7 +45,7 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
   const [dragging, setDragging] = useState(false)
   const supabase = createClient()
   const hoje = new Date()
-  const atrasada = tarefa.status !== 'feito' && isAfter(hoje, parseISO(tarefa.data_limite))
+  const atrasada = (tarefa.tipo === 'normal' || !tarefa.tipo) && tarefa.status !== 'feito' && isAfter(hoje, parseISO(tarefa.data_limite))
 
   // ... (keeping the rest the same for context replacement)
   const saveObs = async () => {
@@ -67,8 +67,12 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
         transform: dragging ? 'scale(0.97)' : 'scale(1)',
         transition: 'opacity 0.15s, transform 0.15s',
       }}
-      draggable
+      draggable={!tarefa.tipo || tarefa.tipo === 'normal'}
       onDragStart={e => {
+        if (tarefa.tipo && tarefa.tipo !== 'normal') {
+          e.preventDefault()
+          return
+        }
         setDragging(true)
         onDragStart(tarefa.id)
         e.dataTransfer.effectAllowed = 'move'
@@ -141,17 +145,19 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
           </div>
 
           {/* Date */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
-            {atrasada ? (
-              <Clock size={12} color="var(--accent-red)" />
-            ) : (
-              <Calendar size={12} color="var(--text-muted)" />
-            )}
-            <span style={{ fontSize: '11px', color: atrasada ? 'var(--accent-red)' : 'var(--text-muted)' }}>
-              {format(parseISO(tarefa.data_limite), "dd 'de' MMM 'de' yyyy", { locale: ptBR })}
-              {atrasada && ' • Atrasada'}
-            </span>
-          </div>
+          {(!tarefa.tipo || tarefa.tipo === 'normal') && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
+              {atrasada ? (
+                <Clock size={12} color="var(--accent-red)" />
+              ) : (
+                <Calendar size={12} color="var(--text-muted)" />
+              )}
+              <span style={{ fontSize: '11px', color: atrasada ? 'var(--accent-red)' : 'var(--text-muted)' }}>
+                {format(parseISO(tarefa.data_limite), "dd 'de' MMM 'de' yyyy", { locale: ptBR })}
+                {atrasada && ' • Atrasada'}
+              </span>
+            </div>
+          )}
 
           {/* Expand */}
           <button
@@ -235,7 +241,7 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
           )}
 
           {/* Status buttons (user only) */}
-          {!isAdmin && (
+          {!isAdmin && (!tarefa.tipo || tarefa.tipo === 'normal') && (
             <div style={{ display: 'flex', gap: '4px', marginTop: '10px', flexWrap: 'wrap' }}>
               {COLUMNS.map(col => (
                 <button

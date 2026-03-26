@@ -12,6 +12,14 @@ export async function POST(request: NextRequest) {
 
     if (!currentAdminId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
+    // Busca os dados do usuário criador para saber se ele é master e qual o master dele
+    const { data: currentAdminData } = await supabase.from('usuarios').select('perfil, master_id').eq('id', currentAdminId).single()
+    if (!currentAdminData) return NextResponse.json({ error: 'Usuário criador não econtrado' }, { status: 401 })
+
+    const isMaster = currentAdminData.perfil === 'master'
+    const cascadedMasterId = isMaster ? currentAdminId : currentAdminData.master_id
+    const assignedAdminId = currentAdminId // Sempre que alguém cria, é o 'dono direto' (admin_id)
+
 
     // Create user in Auth
     const { data, error } = await supabase.auth.admin.createUser({
@@ -24,7 +32,12 @@ export async function POST(request: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
     // Update name and perfil in usuarios table (trigger creates the row)
-    await supabase.from('usuarios').update({ nome, perfil, admin_id: currentAdminId }).eq('id', data.user.id)
+    await supabase.from('usuarios').update({ 
+      nome, 
+      perfil, 
+      admin_id: assignedAdminId,
+      master_id: cascadedMasterId
+    }).eq('id', data.user.id)
 
     return NextResponse.json({ user: data.user })
   } catch (e: unknown) {

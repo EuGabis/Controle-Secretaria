@@ -13,17 +13,16 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
-  if (profile?.perfil === 'admin') {
-    const { data: usuarios } = await supabase
-      .from('usuarios')
-      .select('*')
-      .eq('perfil', 'usuario')
-      .eq('admin_id', user.id)
+  if (profile?.perfil === 'admin' || profile?.perfil === 'master') {
+    let queryUsr = supabase.from('usuarios').select('*').eq('perfil', 'usuario')
+    if (profile.perfil === 'master') queryUsr = queryUsr.eq('master_id', user.id)
+    else queryUsr = queryUsr.eq('admin_id', user.id)
+    const { data: usuarios } = await queryUsr
 
-    const { data: tarefas } = await supabase
-      .from('tarefas')
-      .select('*, usuario:usuarios!usuario_id(*)')
-      .eq('criado_por', user.id)
+    let queryT = supabase.from('tarefas').select('*, usuario:usuarios!inner(*)')
+    if (profile.perfil === 'master') queryT = queryT.eq('usuario.master_id', user.id)
+    else queryT = queryT.eq('criado_por', user.id)
+    const { data: tarefas } = await queryT
 
     return <AdminDashboard usuarios={usuarios || []} tarefas={tarefas || []} />
   }

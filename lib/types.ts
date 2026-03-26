@@ -1,4 +1,4 @@
-export type Perfil = 'admin' | 'usuario'
+export type Perfil = 'admin' | 'usuario' | 'master'
 
 export type StatusTarefa = 'a_fazer' | 'fazendo' | 'feito' | 'atrasado' | 'cancelada'
 
@@ -12,6 +12,7 @@ export interface Usuario {
   email: string
   perfil: Perfil
   admin_id?: string | null
+  master_id?: string | null
   created_at: string
 }
 

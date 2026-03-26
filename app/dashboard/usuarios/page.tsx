@@ -8,12 +8,16 @@ export default async function UsuariosPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('usuarios').select('*').eq('id', user.id).single()
-  if (profile?.perfil !== 'admin') redirect('/dashboard')
+  if (profile?.perfil !== 'admin' && profile?.perfil !== 'master') redirect('/dashboard')
 
-  const { data: usuarios } = await supabase
-    .from('usuarios')
-    .select('*')
-    .or(`id.eq.${user.id},admin_id.eq.${user.id}`)
+  let query = supabase.from('usuarios').select('*')
+  if (profile?.perfil === 'master') {
+    query = query.or(`id.eq.${user.id},master_id.eq.${user.id}`)
+  } else {
+    query = query.or(`id.eq.${user.id},admin_id.eq.${user.id}`)
+  }
+
+  const { data: usuarios } = await query
     .order('perfil', { ascending: false }) // admins first
     .order('nome', { ascending: true })
 

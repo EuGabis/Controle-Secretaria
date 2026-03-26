@@ -9,7 +9,7 @@ import {
   LayoutDashboard, CheckSquare, Bell, ArrowUpDown,
   LogOut, ChevronRight, Shield, User, Users,
   ListTodo, Calendar, CalendarDays, Repeat, RefreshCw,
-  Menu, X
+  Menu, X, MessageSquare
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 
@@ -26,7 +26,8 @@ export default function Sidebar({ user }: SidebarProps) {
   const [notifCount, setNotifCount] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
 
-  const isAdmin = user?.perfil === 'admin'
+  const isAdmin = user?.perfil === 'admin' || user?.perfil === 'master'
+  const isMaster = user?.perfil === 'master'
 
   useEffect(() => {
     if (!user) return
@@ -67,6 +68,7 @@ export default function Sidebar({ user }: SidebarProps) {
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/dashboard/tarefas', icon: CheckSquare, label: 'Tarefas' },
     { href: '/dashboard/usuarios', icon: Users, label: 'Usuários' },
+    { href: '/dashboard/feedbacks', icon: MessageSquare, label: 'Feedbacks' },
     { href: '/dashboard/follow-up', icon: ArrowUpDown, label: 'Follow Up' },
     { href: '/dashboard/notificacoes', icon: Bell, label: 'Notificações', badge: notifCount },
   ]
@@ -200,7 +202,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 {user?.nome || 'Usuário'}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                {isAdmin ? '🛡️ Admin' : '👤 Colaborador'}
+                {isMaster ? '👑 Master' : isAdmin ? '🛡️ Admin' : '👤 Colaborador'}
               </div>
             </div>
             <ThemeToggle />
