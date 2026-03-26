@@ -1,0 +1,61 @@
+export type Perfil = 'admin' | 'usuario'
+
+export type StatusTarefa = 'a_fazer' | 'fazendo' | 'feito' | 'atrasado' | 'cancelada'
+
+export type TarefaTipo = 'normal' | 'diaria' | 'semanal' | 'mensal' | 'rotativa'
+
+export type PrioridadeTarefa = 'baixa' | 'media' | 'alta' | 'urgente'
+
+export interface Usuario {
+  id: string
+  nome: string
+  email: string
+  perfil: Perfil
+  created_at: string
+}
+
+export interface Tarefa {
+  id: string
+  titulo: string
+  descricao: string | null
+  data_limite: string
+  status: StatusTarefa
+  tipo: TarefaTipo
+  prioridade: PrioridadeTarefa
+  progresso: number
+  observacao: string | null
+  alerta_enviado: boolean
+  usuario_id: string
+  criado_por: string
+  created_at: string
+  usuario?: Usuario
+}
+
+export interface Notificacao {
+  id: string
+  mensagem: string
+  tipo: 'individual' | 'coletiva'
+  usuario_id: string | null
+  lida: boolean
+  created_at: string
+}
+
+export interface RespostaNotificacao {
+  id: string
+  notificacao_id: string
+  de_usuario_id: string
+  mensagem: string
+  created_at: string
+  autor?: Usuario
+}
+
+export interface FollowUpLog {
+  id: string
+  tarefa_id: string
+  usuario_id: string
+  status_anterior: StatusTarefa
+  status_novo: StatusTarefa
+  alterado_em: string
+  tarefa?: Tarefa
+  usuario?: Usuario
+}
