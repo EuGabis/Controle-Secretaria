@@ -249,3 +249,110 @@ body {
   position: absolute;
   top: 6px; right: 6px;
 }
+
+/* --- Mobile Hamburger e Ocultação --- */
+.mobile-header {
+  display: none;
+}
+.mobile-overlay {
+  display: none;
+}
+.mobile-close {
+  display: none;
+}
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 12px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 50;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (max-width: 768px) {
+  .dashboard-layout {
+    flex-direction: column !important;
+  }
+  
+  /* Header superior visível no mobile */
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+  }
+
+  /* Overlay preto semitransparente */
+  .mobile-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    z-index: 45;
+  }
+
+  /* Sidebar flutuante à esquerda */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.2);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Botão de fechar aparece na sidebar */
+  .mobile-close {
+    display: block;
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  /* Adaptações do painel principal (Kanban etc) */
+  .page-padding {
+    padding: 16px !important;
+  }
+  .page-title {
+    font-size: 24px !important;
+  }
+  .kanban-board {
+    gap: 12px !important;
+    padding-bottom: 20px !important;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kanban-col {
+    min-width: 85vw !important;
+    scroll-snap-align: center;
+  }
+  .modal-glass {
+    padding: 20px !important;
+    max-width: 95vw !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+  }
+  .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

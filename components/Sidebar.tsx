@@ -8,7 +8,8 @@ import { Usuario } from '@/lib/types'
 import {
   LayoutDashboard, CheckSquare, Bell, ArrowUpDown,
   LogOut, ChevronRight, Shield, User, Users,
-  ListTodo, Calendar, CalendarDays, Repeat, RefreshCw
+  ListTodo, Calendar, CalendarDays, Repeat, RefreshCw,
+  Menu, X
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 
@@ -23,6 +24,7 @@ export default function Sidebar({ user }: SidebarProps) {
   const currentTipo = searchParams.get('tipo')
   const supabase = createClient()
   const [notifCount, setNotifCount] = useState(0)
+  const [isOpen, setIsOpen] = useState(false)
 
   const isAdmin = user?.perfil === 'admin'
 
@@ -39,6 +41,21 @@ export default function Sidebar({ user }: SidebarProps) {
     }
     fetchNotifs()
   }, [user, isAdmin, supabase])
+
+  // Fecha o menu ao trocar de rota no mobile
+  useEffect(() => {
+    setIsOpen(false)
+  }, [pathname, currentTipo])
+
+  // Bloqueia scroll do body quando menu está aberto no mobile
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [isOpen])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -66,122 +83,147 @@ export default function Sidebar({ user }: SidebarProps) {
   const links = isAdmin ? adminLinks : userLinks
 
   return (
-    <aside className="sidebar" style={{
-      width: '240px', minWidth: '240px',
-      background: 'var(--bg-sidebar)',
-      borderRight: '1px solid var(--border)',
-      display: 'flex', flexDirection: 'column',
-      padding: '20px 12px',
-      position: 'sticky', top: 0, height: '100vh',
-    }}>
-      {/* Logo */}
-      <div className="sidebar-header" style={{ marginBottom: '32px', paddingLeft: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+    <>
+      {/* HEADER MOBILE (Hambúrguer) */}
+      <div className="mobile-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{
-            width: '36px', height: '36px',
+            width: '32px', height: '32px',
             background: 'linear-gradient(135deg, #4f7cff, #8b5cf6)',
-            borderRadius: '10px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: '8px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}>
-            <CheckSquare size={18} color="white" />
+            <CheckSquare color="white" size={16} />
           </div>
-          <div>
-            <div style={{ fontSize: '14px', fontWeight: '700' }}>Secretaria</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Sistema Interno</div>
-          </div>
+          <span style={{ fontWeight: '800', fontSize: '18px', letterSpacing: '-0.02em' }} className="text-gradient">
+            Secretaria
+          </span>
         </div>
-      </div>
-
-      {/* Nav Links */}
-      <nav style={{ flex: 1 }}>
-        <div className="sidebar-nav-title" style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: '8px', paddingLeft: '8px' }}>
-          MENU
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {links.map((link) => {
-            const l = link as any;
-            const { href, icon: Icon, label, badge } = l;
-            let active = false;
-            if (l.exact) {
-              active = pathname === '/dashboard/minhas-tarefas' && !currentTipo;
-            } else if (l.tipo) {
-              active = currentTipo === l.tipo;
-            } else {
-              active = pathname === href;
-            }
-            
-            return (
-              <Link key={href} href={href} className={`sidebar-link ${active ? 'active' : ''}`} style={l.isSub ? { paddingLeft: '24px', fontSize: '12px' } : {}}>
-                <Icon size={l.isSub ? 15 : 18} />
-                <span style={{ flex: 1 }}>{label}</span>
-                {badge ? (
-                  <span className="badge-count" style={{
-                    background: 'var(--accent-red)',
-                    color: 'white',
-                    fontSize: '10px',
-                    fontWeight: '700',
-                    borderRadius: '10px',
-                    padding: '1px 6px',
-                    minWidth: '18px',
-                    textAlign: 'center',
-                  }}>
-                    {badge}
-                  </span>
-                ) : (
-                  active && <ChevronRight size={14} />
-                )}
-              </Link>
-            )
-          })}
-        </div>
-      </nav>
-
-      {/* User Card */}
-      <div className="sidebar-user-card" style={{
-        background: 'rgba(255,255,255,0.04)',
-        border: '1px solid var(--border)',
-        borderRadius: '12px',
-        padding: '12px',
-        marginTop: '16px',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{
-            width: '36px', height: '36px',
-            background: isAdmin ? 'linear-gradient(135deg, #4f7cff, #8b5cf6)' : 'rgba(255,255,255,0.08)',
-            borderRadius: '10px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
-          }}>
-            {isAdmin ? <Shield size={16} color="white" /> : <User size={16} color="var(--text-secondary)" />}
-          </div>
-          <div style={{ overflow: 'hidden', flex: 1 }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {user?.nome || 'Usuário'}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              {isAdmin ? '🛡️ Admin' : '👤 Colaborador'}
-            </div>
-          </div>
-          <ThemeToggle />
-        </div>
-        <button
-          onClick={handleLogout}
-          style={{
-            marginTop: '10px', width: '100%',
-            background: 'rgba(255,77,106,0.08)',
-            border: '1px solid rgba(255,77,106,0.2)',
-            borderRadius: '8px', padding: '8px',
-            color: 'var(--accent-red)', fontSize: '12px', fontWeight: '500',
-            cursor: 'pointer', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', gap: '6px', transition: 'all 0.2s',
-            fontFamily: 'Inter, sans-serif',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,77,106,0.15)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,77,106,0.08)')}
-        >
-          <LogOut size={13} /> Sair
+        <button onClick={() => setIsOpen(true)} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}>
+          <Menu size={26} />
         </button>
       </div>
-    </aside>
+
+      {/* OVERLAY MOBILE */}
+      {isOpen && (
+        <div className="mobile-overlay" onClick={() => setIsOpen(false)} />
+      )}
+
+      {/* SIDEBAR MAIN */}
+      <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+        <button className="mobile-close" onClick={() => setIsOpen(false)}>
+          <X size={24} />
+        </button>
+
+        {/* Logo */}
+        <div className="sidebar-header" style={{ marginBottom: '32px', paddingLeft: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '36px', height: '36px',
+              background: 'linear-gradient(135deg, #4f7cff, #8b5cf6)',
+              borderRadius: '10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <CheckSquare size={18} color="white" />
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: '700' }}>Secretaria</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Sistema Interno</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Nav Links */}
+        <nav style={{ flex: 1 }}>
+          <div className="sidebar-nav-title" style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: '8px', paddingLeft: '8px' }}>
+            MENU
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            {links.map((link) => {
+              const l = link as any;
+              const { href, icon: Icon, label, badge } = l;
+              let active = false;
+              if (l.exact) {
+                active = pathname === '/dashboard/minhas-tarefas' && !currentTipo;
+              } else if (l.tipo) {
+                active = currentTipo === l.tipo;
+              } else {
+                active = pathname === href;
+              }
+              
+              return (
+                <Link key={href} href={href} className={`sidebar-link ${active ? 'active' : ''}`} style={l.isSub ? { paddingLeft: '24px', fontSize: '12px' } : {}}>
+                  <Icon size={l.isSub ? 15 : 18} />
+                  <span style={{ flex: 1 }}>{label}</span>
+                  {badge ? (
+                    <span className="badge-count" style={{
+                      background: 'var(--accent-red)',
+                      color: 'white',
+                      fontSize: '10px',
+                      fontWeight: '700',
+                      borderRadius: '10px',
+                      padding: '1px 6px',
+                      minWidth: '18px',
+                      textAlign: 'center',
+                    }}>
+                      {badge}
+                    </span>
+                  ) : (
+                    active && <ChevronRight size={14} />
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+
+        {/* User Card */}
+        <div className="sidebar-user-card" style={{
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid var(--border)',
+          borderRadius: '12px',
+          padding: '12px',
+          marginTop: '16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '36px', height: '36px',
+              background: isAdmin ? 'linear-gradient(135deg, #4f7cff, #8b5cf6)' : 'rgba(255,255,255,0.08)',
+              borderRadius: '10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              {isAdmin ? <Shield size={16} color="white" /> : <User size={16} color="var(--text-secondary)" />}
+            </div>
+            <div style={{ overflow: 'hidden', flex: 1 }}>
+              <div style={{ fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user?.nome || 'Usuário'}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                {isAdmin ? '🛡️ Admin' : '👤 Colaborador'}
+              </div>
+            </div>
+            <ThemeToggle />
+          </div>
+          <button
+            onClick={handleLogout}
+            style={{
+              marginTop: '10px', width: '100%',
+              background: 'rgba(255,77,106,0.08)',
+              border: '1px solid rgba(255,77,106,0.2)',
+              borderRadius: '8px', padding: '8px',
+              color: 'var(--accent-red)', fontSize: '12px', fontWeight: '500',
+              cursor: 'pointer', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', gap: '6px', transition: 'all 0.2s',
+              fontFamily: 'Inter, sans-serif',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,77,106,0.15)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,77,106,0.08)')}
+          >
+            <LogOut size={13} /> Sair
+          </button>
+        </div>
+      </aside>
+    </>
   )
 }
