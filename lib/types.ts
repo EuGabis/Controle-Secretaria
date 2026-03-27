@@ -61,3 +61,15 @@ export interface FollowUpLog {
   tarefa?: Tarefa
   usuario?: Usuario
 }
+
+export interface AuditLog {
+  id: string
+  ator_id: string | null
+  acao: 'INSERT' | 'UPDATE' | 'DELETE'
+  tabela: string
+  registro_id: string
+  dados_antigos: any
+  dados_novos: any
+  created_at: string
+  ator?: { nome: string }
+}

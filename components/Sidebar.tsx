@@ -9,7 +9,7 @@ import {
   LayoutDashboard, CheckSquare, Bell, ArrowUpDown,
   LogOut, ChevronRight, Shield, User, Users,
   ListTodo, Calendar, CalendarDays, Repeat, RefreshCw,
-  Menu, X, MessageSquare
+  Menu, X, MessageSquare, ShieldAlert
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 
@@ -72,6 +72,10 @@ export default function Sidebar({ user }: SidebarProps) {
     { href: '/dashboard/follow-up', icon: ArrowUpDown, label: 'Follow Up' },
     { href: '/dashboard/notificacoes', icon: Bell, label: 'Notificações', badge: notifCount },
   ]
+
+  if (isMaster) {
+    adminLinks.push({ href: '/dashboard/auditoria', icon: ShieldAlert, label: 'Auditoria' })
+  }
 
   const userLinks = [
     { href: '/dashboard/minhas-tarefas', icon: ListTodo, label: 'Todas Tarefas', exact: true },

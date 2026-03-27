@@ -44,6 +44,7 @@ A infraestrutura de dados suporta apagamentos em Cascata para manter integridade
 * **Tabela `follow_up_log`:** O coração da observabilidade. Audita toda mudança de raia (Status A -> Status B) do Dashboard Kanban, preservando quem fez qual movimentação e quando.
 * **Tabela `feedbacks`:** Avaliações de Performance individuais do time, podendo ser Positivas ou Construtivas. Permite avaliações entre Admin -> Colaborador.
 * **Tabela `notificacoes`:** Central de alertas de tarefas criadas ou realocadas para avisar o usuário proativamente das exigências de trabalho.
+* **Tabela `audit_logs`:** O Escudo Anti-Sabotagem. Registra via Triggers do PostgreSQL todas as inserções, edições e deleções nas tabelas críticas, versionando os dados (Antes vs Depois) e o autor da ação.
 
 ---
 
@@ -65,6 +66,10 @@ A infraestrutura de dados suporta apagamentos em Cascata para manter integridade
 ### 🗣️ 4.4 Feedbacks Individuais Direcionados
 - Módulo onde gestores injetam direcionamentos na tela do funcionário baseando-se no trabalho.
 - Utilização de `card badges` (Positivo Verde / Construtivo Amarelo).
+
+### 🛡️ 4.5 Auditoria Global (Escudo de Segurança)
+- Tela exclusiva para a Diretoria (Master) que lista registros imutáveis do banco de dados.
+- Permite "Inspecionar Payload", abrindo um comparativo técnico de quais campos foram alterados em cada transação, prevenindo sabotagens ou exclusões sem rastro.
 
 ---
 
