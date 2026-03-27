@@ -14,9 +14,15 @@ export default async function DashboardPage() {
     .single()
 
   if (profile?.perfil === 'admin' || profile?.perfil === 'master') {
-    let queryUsr = supabase.from('usuarios').select('*').eq('perfil', 'usuario')
-    if (profile.perfil === 'master') queryUsr = queryUsr.eq('master_id', user.id)
-    else queryUsr = queryUsr.eq('admin_id', user.id)
+    // Para Master, queremos ver tanto Admins quanto Usuários
+    let queryUsr = supabase.from('usuarios').select('*')
+    
+    if (profile.perfil === 'master') {
+      // O Master vê TODOS os usuários do sistema (Global)
+    } else {
+      // O Admin vê apenas os 'usuários' subordinados a ele
+      queryUsr = queryUsr.eq('perfil', 'usuario').eq('admin_id', user.id)
+    }
     const { data: usuarios } = await queryUsr
 
     const userIds = usuarios?.map(u => u.id) || []

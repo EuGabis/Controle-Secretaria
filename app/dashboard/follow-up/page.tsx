@@ -21,8 +21,11 @@ export default async function FollowUpPage(props: Props) {
   if (profile?.perfil !== 'admin' && profile?.perfil !== 'master') redirect('/dashboard')
 
   let queryUsr = supabase.from('usuarios').select('id, nome').order('nome')
-  if (profile?.perfil === 'master') queryUsr = queryUsr.eq('master_id', user.id)
-  else queryUsr = queryUsr.eq('admin_id', user.id)
+  if (profile?.perfil === 'master') {
+    // Master vê todos os colaboradores possíveis para filtrar
+  } else {
+    queryUsr = queryUsr.eq('admin_id', user.id)
+  }
   const { data: usuarios } = await queryUsr
 
   const hoje = new Date().toISOString().slice(0, 10)
@@ -34,7 +37,7 @@ export default async function FollowUpPage(props: Props) {
     .order('alterado_em', { ascending: false })
 
   if (profile?.perfil === 'master') {
-    query = query.eq('usuario.master_id', user.id)
+    // Master vê todos os logs de hoje
   } else {
     query = query.eq('tarefa.criado_por', user.id)
   }

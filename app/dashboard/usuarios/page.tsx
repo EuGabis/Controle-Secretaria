@@ -12,7 +12,7 @@ export default async function UsuariosPage() {
 
   let query = supabase.from('usuarios').select('*')
   if (profile?.perfil === 'master') {
-    query = query.or(`id.eq.${user.id},master_id.eq.${user.id}`)
+    // Visão Global para Masters: vê tudo sem filtro
   } else {
     query = query.or(`id.eq.${user.id},admin_id.eq.${user.id}`)
   }

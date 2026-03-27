@@ -11,16 +11,20 @@ export default async function AdminTarefasPage() {
   const { data: profile } = await supabase.from('usuarios').select('*').eq('id', user.id).single()
   if (profile?.perfil !== 'admin' && profile?.perfil !== 'master') redirect('/dashboard/minhas-tarefas')
 
-  let queryUsr = supabase.from('usuarios').select('*').eq('perfil', 'usuario')
-  if (profile?.perfil === 'master') queryUsr = queryUsr.eq('master_id', user.id)
-  else queryUsr = queryUsr.eq('admin_id', user.id)
+  let queryUsr = supabase.from('usuarios').select('*')
+  if (profile?.perfil === 'master') {
+    // Master tem visão global de usuários
+  } else {
+    // Admin vê apenas Usuários sob sua responsabilidade
+    queryUsr = queryUsr.eq('perfil', 'usuario').eq('admin_id', user.id)
+  }
   const { data: usuarios } = await queryUsr
 
   const userIds = usuarios?.map(u => u.id) || []
   let queryT = supabase.from('tarefas').select('*, usuario:usuarios!usuario_id(*)').order('data_limite', { ascending: true })
   
   if (profile?.perfil === 'master') {
-    queryT = queryT.in('usuario_id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'])
+    // Master vê todas as tarefas do sistema
   } else {
     queryT = queryT.eq('criado_por', user.id)
   }
