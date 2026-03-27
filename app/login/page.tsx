@@ -68,7 +68,7 @@ export default function LoginPage() {
             Bem-vindo de volta
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-            Sistema Interno — Gestão de Tarefas
+            Lito Academy — Gestão de Tarefas
           </p>
         </div>
 

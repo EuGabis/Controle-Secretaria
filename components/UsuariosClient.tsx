@@ -296,6 +296,7 @@ export default function UsuariosClient({ usuarios: initial }: Props) {
 
 function UserRow({ user, onEdit, onDelete }: { user: Usuario; onEdit: (u: Usuario) => void; onDelete: (u: Usuario) => void }) {
   const isAdmin = user.perfil === 'admin'
+  const isMaster = user.perfil === 'master'
   return (
     <div className="glass" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '14px' }}>
       <div style={{
@@ -315,8 +316,8 @@ function UserRow({ user, onEdit, onDelete }: { user: Usuario; onEdit: (u: Usuari
           {user.email}
         </div>
       </div>
-      <span className={`badge ${isAdmin ? 'badge-blue' : 'badge-gray'}`} style={{ flexShrink: 0 }}>
-        {isAdmin ? '🛡️ Admin' : '👤 Colaborador'}
+      <span className={`badge ${isMaster ? 'badge-blue' : isAdmin ? 'badge-blue' : 'badge-gray'}`} style={{ flexShrink: 0, background: isMaster ? 'rgba(139,92,246,0.15)' : undefined, color: isMaster ? 'var(--accent-purple)' : undefined, border: isMaster ? '1px solid rgba(139,92,246,0.3)' : undefined }}>
+        {isMaster ? '👑 Master' : isAdmin ? '🛡️ Admin' : '👤 Colaborador'}
       </span>
       <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
         <button onClick={() => onEdit(user)} style={{

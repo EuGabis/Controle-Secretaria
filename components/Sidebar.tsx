@@ -99,7 +99,7 @@ export default function Sidebar({ user }: SidebarProps) {
             <CheckSquare color="white" size={16} />
           </div>
           <span style={{ fontWeight: '800', fontSize: '18px', letterSpacing: '-0.02em' }} className="text-gradient">
-            Secretaria
+            Lito Academy
           </span>
         </div>
         <button onClick={() => setIsOpen(true)} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}>
@@ -130,8 +130,8 @@ export default function Sidebar({ user }: SidebarProps) {
               <CheckSquare size={18} color="white" />
             </div>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: '700' }}>Secretaria</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Sistema Interno</div>
+              <div style={{ fontSize: '14px', fontWeight: '700' }}>Lito Academy</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Gestão de Tarefas</div>
             </div>
           </div>
         </div>

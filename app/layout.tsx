@@ -3,7 +3,7 @@ import './globals.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
 
 export const metadata: Metadata = {
-  title: 'Secretaria — Sistema Interno',
+  title: 'Lito Academy',
   description: 'Plataforma de gerenciamento de tarefas interna',
 }
 
