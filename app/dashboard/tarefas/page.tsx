@@ -15,8 +15,8 @@ export default async function AdminTarefasPage() {
   if (profile?.perfil === 'master') {
     // Master tem visão global de usuários
   } else {
-    // Admin vê apenas Usuários sob sua responsabilidade
-    queryUsr = queryUsr.eq('perfil', 'usuario').eq('admin_id', user.id)
+    // Admin vê seus 'usuários' subordinados + a si mesmo
+    queryUsr = queryUsr.or(`id.eq.${user.id},and(perfil.eq.usuario,admin_id.eq.${user.id})`)
   }
   const { data: usuarios } = await queryUsr
 
@@ -26,7 +26,8 @@ export default async function AdminTarefasPage() {
   if (profile?.perfil === 'master') {
     // Master vê todas as tarefas do sistema
   } else {
-    queryT = queryT.eq('criado_por', user.id)
+    // Admin vê tarefas que criou OU que foram atribuídas a ele
+    queryT = queryT.or(`criado_por.eq.${user.id},usuario_id.eq.${user.id}`)
   }
   
   const { data: tarefas } = await queryT

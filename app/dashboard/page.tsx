@@ -20,8 +20,8 @@ export default async function DashboardPage() {
     if (profile.perfil === 'master') {
       // O Master vê TODOS os usuários do sistema (Global)
     } else {
-      // O Admin vê apenas os 'usuários' subordinados a ele
-      queryUsr = queryUsr.eq('perfil', 'usuario').eq('admin_id', user.id)
+      // O Admin vê os 'usuários' subordinados + a si mesmo
+      queryUsr = queryUsr.or(`id.eq.${user.id},and(perfil.eq.usuario,admin_id.eq.${user.id})`)
     }
     const { data: usuarios } = await queryUsr
 
@@ -31,11 +31,12 @@ export default async function DashboardPage() {
     if (profile.perfil === 'master') {
       queryT = queryT.in('usuario_id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'])
     } else {
-      queryT = queryT.eq('criado_por', user.id)
+      // Admin vê tarefas que criou (para outros) OU que foram atribuídas a ele (pelo Master)
+      queryT = queryT.or(`criado_por.eq.${user.id},usuario_id.eq.${user.id}`)
     }
     const { data: tarefas } = await queryT
 
-    return <AdminDashboard usuarios={usuarios || []} tarefas={tarefas || []} />
+    return <AdminDashboard usuarios={usuarios || []} tarefas={tarefas || []} currentUserId={user.id} />
   }
 
   // Usuário normal → redireciona para kanban

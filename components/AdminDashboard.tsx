@@ -10,6 +10,7 @@ import AnalyticsDashboard from './AnalyticsDashboard'
 interface Props {
   usuarios: Usuario[]
   tarefas: Tarefa[]
+  currentUserId: string
 }
 
 function getStats(userId: string, tarefas: Tarefa[]) {
@@ -26,7 +27,7 @@ function getStats(userId: string, tarefas: Tarefa[]) {
   }
 }
 
-export default function AdminDashboard({ usuarios, tarefas }: Props) {
+export default function AdminDashboard({ usuarios, tarefas, currentUserId }: Props) {
   const [viewMode, setViewMode] = useState<'cards' | 'analytics'>('cards')
 
   const totalTarefas = tarefas.length
@@ -159,7 +160,12 @@ export default function AdminDashboard({ usuarios, tarefas }: Props) {
                       {u.nome.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div style={{ fontWeight: '600', fontSize: '15px' }}>{u.nome}</div>
+                      <div style={{ fontWeight: '600', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {u.nome}
+                        {u.id === currentUserId && (
+                          <span style={{ fontSize: '10px', background: 'rgba(79,124,255,0.15)', color: 'var(--accent-blue)', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>EU</span>
+                        )}
+                      </div>
                       <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{u.email}</div>
                     </div>
                   </Link>
