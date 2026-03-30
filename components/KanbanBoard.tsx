@@ -173,7 +173,7 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
           {expandido && (
             <div style={{ marginTop: '10px', borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
               {tarefa.descricao && (
-                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px', lineHeight: 1.5 }}>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
                   {tarefa.descricao}
                 </p>
               )}
@@ -182,7 +182,7 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
               </label>
               <textarea
                 className="input-field"
-                style={{ fontSize: '12px', minHeight: '70px', resize: 'vertical' }}
+                style={{ fontSize: '12px', minHeight: '70px', resize: 'vertical', whiteSpace: 'pre-wrap' }}
                 placeholder="Adicione uma observação..."
                 value={obs}
                 onChange={e => setObs(e.target.value)}

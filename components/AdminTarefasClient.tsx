@@ -244,8 +244,13 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
               </div>
               <div>
                 <label style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Descrição</label>
-                <textarea className="input-field" placeholder="Descreva a tarefa..." rows={3} style={{ resize: 'vertical' }}
+                <textarea className="input-field" placeholder="Descreva a tarefa..." rows={3} style={{ resize: 'vertical', whiteSpace: 'pre-wrap' }}
                   value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Observação</label>
+                <textarea className="input-field" placeholder="Adicione uma observação..." rows={2} style={{ resize: 'vertical', whiteSpace: 'pre-wrap' }}
+                  value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
