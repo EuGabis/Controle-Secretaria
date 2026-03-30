@@ -24,7 +24,8 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
   const [selectedUser, setSelectedUser] = useState<string>(() => searchParams.get('usuario') ?? 'all')
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>(() => (searchParams.get('status') as StatusFilter) ?? 'all')
   const [selectedTipo, setSelectedTipo] = useState<string>(() => searchParams.get('tipo') ?? 'all')
-  const [form, setForm] = useState({ titulo: '', descricao: '', data_limite: '', usuario_id: '', tipo: 'normal' as TarefaTipo, prioridade: 'media' as PrioridadeTarefa })
+  const [form, setForm] = useState({ titulo: '', descricao: '', data_limite: '', usuario_id: '', tipo: 'normal' as TarefaTipo, prioridade: 'media' as PrioridadeTarefa, observacao: '' })
+  const [editingTarefa, setEditingTarefa] = useState<Tarefa | null>(null)
   const [createError, setCreateError] = useState('')
   const supabase = createClient()
 
@@ -51,47 +52,82 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
     return matchUser && matchStatus && matchTipo
   })
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setCreateError('')
-    const { data, error } = await supabase.from('tarefas').insert({
-      ...form,
-      status: 'a_fazer',
-      progresso: 0,
-      criado_por: adminId,
-    }).select('*, usuario:usuarios!usuario_id(*)').single()
 
-    if (error) {
-      setCreateError(`Erro: ${error.message} (code: ${error.code})`)
-      setSaving(false)
-      return
-    }
+    if (editingTarefa) {
+      // UPDATE
+      const { data, error } = await supabase.from('tarefas').update({
+        ...form,
+      }).eq('id', editingTarefa.id).select('*, usuario:usuarios!usuario_id(*)').single()
 
-    if (data) {
-      setTarefas(prev => [...prev, data])
+      if (error) {
+        setCreateError(`Erro ao atualizar: ${error.message}`)
+        setSaving(false)
+        return
+      }
+
+      setTarefas(prev => prev.map(t => t.id === editingTarefa.id ? { ...t, ...data } : t))
     } else {
-      const responsavel = usuarios.find(u => u.id === form.usuario_id) || null
-      setTarefas(prev => [...prev, {
-        id: crypto.randomUUID(),
-        titulo: form.titulo,
-        descricao: form.descricao,
-        data_limite: form.data_limite,
+      // CREATE
+      const { data, error } = await supabase.from('tarefas').insert({
+        ...form,
         status: 'a_fazer',
         progresso: 0,
-        observacao: null,
-        usuario_id: form.usuario_id,
         criado_por: adminId,
-        created_at: new Date().toISOString(),
-        usuario: responsavel,
-      } as Tarefa])
+      }).select('*, usuario:usuarios!usuario_id(*)').single()
+
+      if (error) {
+        setCreateError(`Erro: ${error.message} (code: ${error.code})`)
+        setSaving(false)
+        return
+      }
+
+      if (data) {
+        setTarefas(prev => [...prev, data])
+      } else {
+        const responsavel = usuarios.find(u => u.id === form.usuario_id) || null
+        setTarefas(prev => [...prev, {
+          id: crypto.randomUUID(),
+          titulo: form.titulo,
+          descricao: form.descricao,
+          data_limite: form.data_limite,
+          status: 'a_fazer',
+          progresso: 0,
+          observacao: form.observacao || null,
+          usuario_id: form.usuario_id,
+          criado_por: adminId,
+          created_at: new Date().toISOString(),
+          usuario: responsavel,
+        } as Tarefa])
+      }
     }
 
-    setSelectedUser('all')
-    setSelectedStatus('all')
-    setShowModal(false)
-    setForm({ titulo: '', descricao: '', data_limite: '', usuario_id: '', tipo: 'normal', prioridade: 'media' })
+    handleCloseModal()
     setSaving(false)
+  }
+
+  const handleEdit = (tarefa: Tarefa) => {
+    setEditingTarefa(tarefa)
+    setForm({
+      titulo: tarefa.titulo,
+      descricao: tarefa.descricao || '',
+      data_limite: tarefa.data_limite,
+      usuario_id: tarefa.usuario_id,
+      tipo: tarefa.tipo || 'normal',
+      prioridade: tarefa.prioridade || 'media',
+      observacao: tarefa.observacao || ''
+    })
+    setShowModal(true)
+  }
+
+  const handleCloseModal = () => {
+    setShowModal(false)
+    setEditingTarefa(null)
+    setForm({ titulo: '', descricao: '', data_limite: '', usuario_id: '', tipo: 'normal', prioridade: 'media', observacao: '' })
+    setCreateError('')
   }
 
   const statusOptions: { id: StatusFilter; label: string }[] = [
@@ -179,7 +215,7 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
         ))}
       </div>
 
-      <KanbanBoard key={`${selectedUser}-${selectedStatus}`} tarefas={filteredTarefas} isAdmin={true} />
+      <KanbanBoard key={`${selectedUser}-${selectedStatus}`} tarefas={filteredTarefas} isAdmin={true} onEdit={handleEdit} />
 
       {/* Modal */}
       {showModal && (
@@ -190,15 +226,17 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
         }}>
           <div className="glass" style={{ width: '100%', maxWidth: '480px', padding: '32px', position: 'relative' }}>
             <button
-              onClick={() => setShowModal(false)}
+              onClick={handleCloseModal}
               style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
             >
               <X size={20} />
             </button>
 
-            <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '24px' }}>Nova Tarefa</h2>
+            <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '24px' }}>
+              {editingTarefa ? 'Editar Tarefa' : 'Nova Tarefa'}
+            </h2>
 
-            <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <label style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Título *</label>
                 <input className="input-field" placeholder="Título da tarefa" required
@@ -256,11 +294,11 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
                 </div>
               )}
               <div style={{ display: 'flex', gap: '10px', paddingTop: '8px' }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowModal(false)} style={{ flex: 1 }}>
+                <button type="button" className="btn-secondary" onClick={handleCloseModal} style={{ flex: 1 }}>
                   Cancelar
                 </button>
                 <button type="submit" className="btn-primary" disabled={loading} style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  {loading ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Salvando...</> : 'Criar Tarefa'}
+                  {loading ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Salvando...</> : (editingTarefa ? 'Salvar Alterações' : 'Criar Tarefa')}
                 </button>
               </div>
             </form>

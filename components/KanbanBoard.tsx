@@ -5,7 +5,7 @@ import { Tarefa, StatusTarefa } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { format, isAfter, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Calendar, Clock, ChevronRight, GripVertical } from 'lucide-react'
+import { Calendar, Clock, ChevronRight, GripVertical, Edit } from 'lucide-react'
 
 const PRIORIDADE_CONFIG = {
   baixa:   { label: 'Baixa',   color: '#10d98c', bg: 'rgba(16,217,140,0.12)'  },
@@ -18,6 +18,7 @@ interface KanbanProps {
   tarefas: Tarefa[]
   isAdmin?: boolean
   onUpdate?: () => void
+  onEdit?: (tarefa: Tarefa) => void
 }
 
 const COLUMNS: { id: StatusTarefa; label: string; emoji: string; color: string }[] = [
@@ -32,13 +33,14 @@ function getProgresso(status: StatusTarefa, current: number): number {
   return current || 50
 }
 
-function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragStart, onDelete }: {
+function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragStart, onDelete, onEdit }: {
   tarefa: Tarefa
   isAdmin: boolean
   onStatusChange: (id: string, status: StatusTarefa, novaObs?: string) => void
   onProgressChange: (id: string, progress: number) => void
   onDragStart: (id: string) => void
   onDelete: (id: string) => void
+  onEdit?: (tarefa: Tarefa) => void
 }) {
   const [expandido, setExpandido] = useState(false)
   const [obs, setObs] = useState(tarefa.observacao || '')
@@ -185,10 +187,17 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
                 value={obs}
                 onChange={e => setObs(e.target.value)}
                 onBlur={saveObs}
-                disabled={isAdmin}
               />
               {isAdmin && (
-                <div style={{ display: 'flex', gap: '8px', marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--border)' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--border)' }}>
+                  {onEdit && (
+                    <button
+                      onClick={() => onEdit(tarefa)}
+                      style={{ flex: '1 1 45%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px', fontSize: '11px', fontWeight: '600', background: 'rgba(79,124,255,0.1)', color: 'var(--accent-blue)', border: '1px solid rgba(79,124,255,0.3)', borderRadius: '6px', cursor: 'pointer' }}
+                    >
+                      <Edit size={12} /> Editar
+                    </button>
+                  )}
                   {tarefa.status !== 'cancelada' && (
                     <button
                       onClick={async () => {
@@ -211,7 +220,7 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
                           onStatusChange(tarefa.id, 'cancelada', motivo.trim() ? (novaObs as string) : undefined)
                         }
                       }}
-                      style={{ flex: 1, padding: '6px', fontSize: '11px', fontWeight: '600', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+                      style={{ flex: '1 1 45%', padding: '6px', fontSize: '11px', fontWeight: '600', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
                     >
                       🚫 Cancelar
                     </button>
@@ -227,7 +236,7 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
                         onDelete(tarefa.id)
                       }
                     }}
-                    style={{ flex: 1, padding: '6px', fontSize: '11px', fontWeight: '600', background: 'rgba(255,77,106,0.1)', color: 'var(--accent-red)', border: '1px solid rgba(255,77,106,0.3)', borderRadius: '6px', cursor: 'pointer' }}
+                    style={{ flex: '1 1 100%', padding: '6px', fontSize: '11px', fontWeight: '600', background: 'rgba(255,77,106,0.1)', color: 'var(--accent-red)', border: '1px solid rgba(255,77,106,0.3)', borderRadius: '6px', cursor: 'pointer' }}
                   >
                     🗑️ Excluir
                   </button>
@@ -264,7 +273,7 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
   )
 }
 
-export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, onUpdate }: KanbanProps) {
+export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, onUpdate, onEdit }: KanbanProps) {
   const [tarefas, setTarefas] = useState(initialTarefas)
   const [dragOverCol, setDragOverCol] = useState<StatusTarefa | null>(null)
   const dragIdRef = useRef<string | null>(null)
@@ -373,6 +382,7 @@ export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, 
                   onProgressChange={handleProgressChange}
                   onDragStart={id => { dragIdRef.current = id }}
                   onDelete={handleDelete}
+                  onEdit={onEdit}
                 />
               ))}
               
