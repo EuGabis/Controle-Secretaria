@@ -99,7 +99,7 @@ export interface ChecklistResposta {
   turma_id: string
   valor_texto: string | null
   valor_data: string | null
-  status_check: boolean
+  status: 'PENDENTE' | 'OK' | 'N/A'
   respondido_por: string | null
   updated_at: string
   autor?: Usuario
