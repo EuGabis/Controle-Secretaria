@@ -168,6 +168,26 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                })}
             </tbody>
          </table>
+
+         {isAdmin && (
+           <div className="footer-v8">
+             <button className="add-v8" onClick={async () => {
+                const maxOrdem = Math.max(0, ...itens.map(i => i.ordem ?? 0))
+                const maxN = Math.max(0, ...itens.map(i => i.item_n ?? 0))
+                const { data } = await supabase.from('checklist_itens').insert({
+                  item_n: maxN + 1,
+                  titulo: 'NOVA ETAPA',
+                  contexto: 'HOJE',
+                  responsavel: 'ADM',
+                  ordem: maxOrdem + 1,
+                  tipo_campo: 'check'
+                }).select().single()
+                if (data) setItens(prev => [...prev, data])
+             }}>
+                + ADICIONAR NOVA ETAPA
+             </button>
+           </div>
+         )}
       </div>
 
       {/* MODAL EDIÇÃO */}
@@ -206,15 +226,48 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
               </div>
               <div className="m-f">
                  <button className="btn-v8 primary" onClick={async () => {
-                    await supabase.from('checklist_itens').update({
+                    setSaving('modal-save')
+                    
+                    // Lógica de Shift (Deslocamento)
+                    const targetN = editingItem.item_n
+                    const oldItem = itens.find(i => i.id === editingItem.id)
+                    const isNewNumber = oldItem?.item_n !== targetN
+
+                    if (isNewNumber) {
+                       // 1. Pegamos todos os itens que precisam ser "empurrados" para baixo
+                       const toShift = itens.filter(i => i.item_n >= targetN && i.id !== editingItem.id)
+                       
+                       if (toShift.length > 0) {
+                          const shiftUpdates = toShift.map(i => ({
+                             ...i,
+                             item_n: (i.item_n || 0) + 1,
+                             ordem: (i.ordem || 0) + 1
+                          }))
+                          // 2. Atualizamos eles primeiro no banco
+                          await supabase.from('checklist_itens').upsert(shiftUpdates)
+                       }
+                    }
+
+                    // 3. Salvamos o item atual na posição desejada
+                    const { data, error } = await supabase.from('checklist_itens').update({
                       item_n: editingItem.item_n,
                       titulo: editingItem.titulo,
                       contexto: editingItem.contexto,
                       responsavel: editingItem.responsavel,
-                      descricao: editingItem.descricao
-                    }).eq('id', editingItem.id)
-                    setItens(prev => prev.map(i => i.id === editingItem.id ? editingItem : i)); setEditingItem(null)
-                 }}><Save size={16}/> SALVAR MUDANÇAS NO ITEM</button>
+                      descricao: editingItem.descricao,
+                      ordem: editingItem.item_n // Sincronizamos a ordem com o número
+                    }).eq('id', editingItem.id).select().single()
+
+                    if (!error && data) {
+                       // 4. Recarregamos todos os itens para garantir que a tela reflita a nova ordem exata
+                       const { data: allItens } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
+                       if (allItens) setItens(allItens)
+                       setEditingItem(null)
+                    }
+                    setSaving(null)
+                 }}>
+                    {saving === 'modal-save' ? <><Loader2 size={16} className="spin"/> PROCESSANDO REORDENAMENTO...</> : <><Save size={16}/> SALVAR E REORDENAR LISTA</>}
+                 </button>
               </div>
            </div>
         </div>
