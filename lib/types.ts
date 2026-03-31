@@ -76,9 +76,11 @@ export interface AuditLog {
 
 export interface ChecklistItem {
   id: string
-  titulo: string
+  titulo: string // ETAPA
+  item_n: number
   responsavel: string | null
-  contexto: string | null
+  contexto: string | null // PRAZO
+  descricao: string | null
   tipo_campo: 'check' | 'texto' | 'data'
   ordem: number
   created_at: string

@@ -66,7 +66,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
   const adminLinks = [
     { href: '/dashboard/tarefas', icon: CheckSquare, label: 'Tarefas' },
-    { href: '/dashboard/checklist', icon: ClipboardCheck, label: 'Checklist' },
+    { href: '/dashboard/checklist', icon: ClipboardCheck, label: 'Checklist Imersão' },
     { href: '/dashboard/usuarios', icon: Users, label: 'Usuários' },
     { href: '/dashboard/feedbacks', icon: MessageSquare, label: 'Feedbacks' },
     { href: '/dashboard/follow-up', icon: ArrowUpDown, label: 'Follow Up' },
