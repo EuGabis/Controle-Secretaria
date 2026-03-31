@@ -19,47 +19,44 @@ interface Props {
   usuarioId: string
 }
 
-export default function ChecklistClient({ itens: initialItens, turmas: initialTurmas, respostas: initialRespostas, perfil, usuarioId }: Props) {
+const GLOBAL_TURMA_ID = '00000000-0000-0000-0000-000000000000'
+
+export default function ChecklistClient({ itens: initialItens, turmas, respostas: initialRespostas, perfil, usuarioId }: Props) {
   const [itens, setItens] = useState(initialItens)
   const [respostas, setRespostas] = useState(initialRespostas)
-  // BUGFIX: Garante que seleciona a primeira turma se houver, para evitar erro de salvamento
-  const [selectedTurmaId, setSelectedTurmaId] = useState<string>(initialTurmas[0]?.id || '')
   
-  const [customTitle, setCustomTitle] = useState('')
+  // Agora usamos um ID fixo para o sistema padrão, ignorando a necessidade de turmas externas
+  const [selectedTurmaId] = useState<string>(GLOBAL_TURMA_ID)
+  
+  const [customTitle, setCustomTitle] = useState('Checklist de Imersão - Padrão')
   const [saving, setSaving] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
   
   const isAdmin = perfil === 'admin' || perfil === 'master'
   const supabase = createClient()
 
-  // Sincroniza o título quando a turma muda
-  useEffect(() => {
-    const turma = initialTurmas.find(t => t.id === selectedTurmaId)
-    if (turma) {
-      setCustomTitle(`Acompanhamento Imersão - ${turma.nome}`)
-    }
-  }, [selectedTurmaId, initialTurmas])
-
+  // Map de respostas global
   const turmaRespostasMap = useMemo(() => {
     const map: Record<string, ChecklistResposta> = {}
-    respostas.filter(r => r.turma_id === selectedTurmaId).forEach(r => {
+    respostas.forEach(r => {
       map[r.item_id] = r
     })
     return map
-  }, [respostas, selectedTurmaId])
+  }, [respostas])
 
-  // --- ATUALIZAÇÃO LOCAL (PARA DIGITAÇÃO) ---
+  // --- ATUALIZAÇÃO LOCAL (PARA DIGITAÇÃO INSTANTÂNEA) ---
   const handleLocalChange = (itemId: string, field: 'valor_texto' | 'valor_data', value: string) => {
     const existing = turmaRespostasMap[itemId]
     if (existing) {
       setRespostas(prev => prev.map(r => r.id === existing.id ? { ...r, [field]: value } : r))
     } else {
-      const tempId = `temp-${itemId}-${selectedTurmaId}`
+      const tempId = `temp-${itemId}`
       const newResp: any = {
         id: tempId,
         item_id: itemId,
-        turma_id: selectedTurmaId,
+        turma_id: GLOBAL_TURMA_ID,
         valor_texto: field === 'valor_texto' ? value : null,
         valor_data: field === 'valor_data' ? value : null,
         status: 'PENDENTE',
@@ -72,30 +69,28 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
 
   // --- SALVAMENTO NO BANCO (UPSERT) ---
   const performSave = async (itemId: string, updates: Partial<ChecklistResposta>) => {
-    if (!selectedTurmaId) {
-        alert("Atenção: Selecione uma turma no seletor para poder salvar.");
-        return;
-    }
-    
     setSaving(`cell-${itemId}`)
+
+    // Payload de gravação
+    const payload = {
+        item_id: itemId,
+        turma_id: GLOBAL_TURMA_ID,
+        ...updates,
+        respondido_por: usuarioId,
+        updated_at: new Date().toISOString()
+    }
 
     const { data, error } = await supabase
         .from('checklist_respostas')
-        .upsert({
-            item_id: itemId,
-            turma_id: selectedTurmaId,
-            ...updates,
-            respondido_por: usuarioId,
-            updated_at: new Date().toISOString()
-        }, { onConflict: 'item_id,turma_id' })
+        .upsert(payload, { onConflict: 'item_id,turma_id' })
         .select()
         .single()
 
     if (error) {
-        console.error("ERRO SUPABASE:", error)
-        alert(`Erro Crítico: ${error.message}`)
+        console.error("ERRO AO SALVAR:", error)
+        alert(`Erro ao salvar: ${error.message}`)
     } else if (data) {
-        setRespostas(prev => prev.map(r => (r.item_id === itemId && r.turma_id === selectedTurmaId) ? data : r))
+        setRespostas(prev => prev.map(r => (r.item_id === itemId) ? data : r))
     }
 
     setTimeout(() => setSaving(null), 300)
@@ -111,63 +106,44 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
     if (!isAdmin) return
     const nextN = itens.length > 0 ? Math.max(...itens.map(i => i.item_n)) + 1 : 1
     const { data, error } = await supabase.from('checklist_itens').insert({
-      item_n: nextN, titulo: 'Nova Etapa', contexto: 'Prazo', responsavel: 'Nome', descricao: '', tipo_campo: 'check', ordem: nextN
+      item_n: nextN, titulo: 'Nova Etapa', contexto: 'Prazo', responsavel: 'Responsável', descricao: '', tipo_campo: 'check', ordem: nextN
     }).select().single()
     if (!error && data) setItens(prev => [...prev, data])
   }
 
   return (
-    <div className="checklist-vfinal-container">
-      {/* HEADER PREMIUM REFORMULADO */}
-      <div className="header-vfinal glass">
-        <div className="header-vfinal-left">
-           <div className="brand-badge"><DatabaseZap size={22} /></div>
-           <div className="title-area">
-             {/* TÍTULO EDITÁVEL DO RELATÓRIO */}
-             <input 
-               className="title-input-edit" 
-               value={customTitle} 
-               onChange={e => setCustomTitle(e.target.value)} 
-               title="Clique para editar o título do relatório"
-             />
-             <span>Gestão de Processos - Lito Academy</span>
+    <div className="checklist-standalone-container">
+      {/* HEADER LIMPO E PADRÃO */}
+      <div className="header-std glass">
+        <div className="header-std-left">
+           <div className="brand-logo"><DatabaseZap size={24} /></div>
+           <div className="title-block">
+             <input className="main-title-input" value={customTitle} onChange={e => setCustomTitle(e.target.value)} />
+             <span className="subtitle">Módulo de Acompanhamento Imersão - Lito Academy</span>
            </div>
         </div>
-
-        <div className="header-vfinal-right">
-           {/* SELETOR DE TURMA (RESTAURADO PARA FUNCIONAMENTO DO BANCO) */}
-           <div className="turma-selector-mini">
-              <Filter size={14} color="#6e6e80" />
-              <select value={selectedTurmaId} onChange={e => setSelectedTurmaId(e.target.value)}>
-                {initialTurmas.length > 0 ? (
-                  initialTurmas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)
-                ) : (
-                  <option value="">Nenhuma Turma Encontrada</option>
-                )}
-              </select>
-           </div>
-
-           <button className="btn-vfinal primary" onClick={() => {
+        <div className="header-std-right">
+           <button className="btn-std primary" onClick={() => {
               const headers = ['ITEM', 'PRAZO', 'RESPONSÁVEL', 'ETAPA', 'DESCRIÇÃO', 'DATA', 'STATUS']
-              const csvData = [headers, ...itens.map(i => [i.item_n, i.contexto, i.responsavel, i.titulo, i.descricao, turmaRespostasMap[i.id]?.valor_data || '-', turmaRespostasMap[i.id]?.valor_texto || ''])]
-              const content = csvData.map(r => r.join(';')).join('\n')
+              const csv = [headers, ...itens.map(i => [i.item_n, i.contexto, i.responsavel, i.titulo, i.descricao, turmaRespostasMap[i.id]?.valor_data || '-', turmaRespostasMap[i.id]?.valor_texto || ''])]
+              const content = csv.map(r => r.join(';')).join('\n')
               const link = document.createElement('a'); link.href = encodeURI("data:text/csv;charset=utf-8,\uFEFF" + content); link.download = `${customTitle}.csv`; link.click()
-           }}><Download size={16}/> Baixar Relatório</button>
+           }}><Download size={18}/> Exportar</button>
         </div>
       </div>
 
-      {/* TABELA PLANILHA */}
-      <div className="table-viewport-vfinal glass">
-        <table className="table-vfinal">
+      {/* QUADRO DE PROCESSOS */}
+      <div className="proc-viewport glass">
+        <table className="proc-table">
           <thead>
             <tr>
-              <th className="th-vfinal center">#</th>
-              <th className="th-vfinal">PRAZO</th>
-              <th className="th-vfinal">RESPONSÁVEL</th>
-              <th className="th-vfinal">ETAPA / ITEM DO PROCESSO</th>
-              <th className="th-vfinal">DETALHAMENTO</th>
-              <th className="th-vfinal">DATA REALIZAÇÃO</th>
-              <th className="th-vfinal">STATUS / SITUAÇÃO (DIGITE AQUI)</th>
+              <th className="th-proc center">#</th>
+              <th className="th-proc">PRAZO</th>
+              <th className="th-proc">RESPONSÁVEL</th>
+              <th className="th-proc">ETAPA / ITEM</th>
+              <th className="th-proc">DESCRIÇÃO DO PROCESSO</th>
+              <th className="th-proc">DATA REALIZAÇÃO</th>
+              <th className="th-proc">SITUAÇÃO / STATUS (ESCREVA AQUI)</th>
             </tr>
           </thead>
           <tbody>
@@ -176,44 +152,43 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
               const isSaving = saving === `cell-${item.id}`
               
               return (
-                <tr key={item.id} className="tr-vfinal">
-                  <td className="td-vfinal center">
-                    <div className="n-wrap">
-                      <span className="n-badge">{item.item_n}</span>
-                      {isAdmin && <button className="del-btn-vfinal" onClick={() => handleDeleteItem(item.id)}><Trash size={12}/></button>}
+                <tr key={item.id} className="row-proc">
+                  <td className="cell-proc center">
+                    <div className="n-col">
+                      <span className="n-pill">{item.item_n}</span>
+                      {isAdmin && <button className="trash-btn" onClick={() => handleDeleteItem(item.id)}><Trash size={12}/></button>}
                     </div>
                   </td>
-                  <td className="td-vfinal prazo-txt">{item.contexto}</td>
-                  <td className="td-vfinal blue-txt">{item.responsavel}</td>
-                  <td className="td-vfinal font-bold">
-                    <div className="edit-wrap-vfinal">
-                       {/* NOME DA ETAPA (EDITÁVEL PELO ADMIN) */}
+                  <td className="cell-proc deadline-txt">{item.contexto}</td>
+                  <td className="cell-proc resp-txt">{item.responsavel}</td>
+                  <td className="cell-proc font-bold">
+                    <div className="title-edit-wrap">
                        {item.titulo}
-                       {isAdmin && <button className="mini-edit-btn" onClick={() => setEditingItem(item)}><Edit3 size={11}/></button>}
+                       {isAdmin && <button className="pencil-btn" onClick={() => setEditingItem(item)}><Edit3 size={11}/></button>}
                     </div>
                   </td>
-                  <td className="td-vfinal desc-txt">{item.descricao}</td>
-                  <td className="td-vfinal">
+                  <td className="cell-proc desc-txt">{item.descricao}</td>
+                  <td className="cell-proc">
                     <input 
                       type="date" 
-                      className="input-vfinal" 
+                      className="inp-proc" 
                       value={resp?.valor_data || ''} 
                       onChange={e => handleLocalChange(item.id, 'valor_data', e.target.value)}
                       onBlur={e => performSave(item.id, { valor_data: (e.target as HTMLInputElement).value })} 
                     />
                   </td>
-                  <td className="td-vfinal">
-                    <div className="status-container-vfinal">
+                  <td className="cell-proc">
+                    <div className="status-inp-wrap">
                       <input 
                         type="text" 
-                        className="input-vfinal status-txt-input" 
-                        placeholder="Escreva algo..."
+                        className="inp-proc status-fill" 
+                        placeholder="Escreva..."
                         value={resp?.valor_texto || ''}
                         onChange={e => handleLocalChange(item.id, 'valor_texto', e.target.value)}
                         onBlur={e => performSave(item.id, { valor_texto: (e.target as HTMLInputElement).value })}
                         onKeyDown={e => e.key === 'Enter' && performSave(item.id, { valor_texto: (e.target as HTMLInputElement).value })}
                       />
-                      {isSaving && <div className="loader-vfinal"><Loader2 size={12} className="spin" /></div>}
+                      {isSaving && <div className="saving-box"><Loader2 size={12} className="spin" /></div>}
                     </div>
                   </td>
                 </tr>
@@ -221,35 +196,34 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
             })}
           </tbody>
         </table>
-        
-        {isAdmin && (
-          <div className="footer-vfinal">
-            <button className="add-btn-vfinal" onClick={handleAddItem}><Plus size={16}/> Adicionar Nova Etapa ao Modelo</button>
-          </div>
-        )}
+        {isAdmin && <div className="add-footer"><button className="add-btn-flat" onClick={handleAddItem}><Plus size={18}/> Nova Etapa</button></div>}
       </div>
 
       {editingItem && (
-        <div className="overlay-vfinal" onClick={() => setEditingItem(null)}>
-           <div className="modal-vfinal glass" onClick={e => e.stopPropagation()}>
-              <div className="modal-header-vfinal"><h3>Editar Etapa #{editingItem.item_n}</h3><button onClick={() => setEditingItem(null)}><X/></button></div>
-              <div className="modal-body-vfinal">
-                 <div className="input-group-vfinal">
-                    <label>Nome do Processo</label>
-                    <input className="input-vfinal" value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value})} />
+        <div className="modal-overlay" onClick={() => setEditingItem(null)}>
+           <div className="modal-box glass" onClick={e => e.stopPropagation()}>
+              <div className="modal-header"><h3>✏️ Editar Etapa #{editingItem.item_n}</h3><button onClick={() => setEditingItem(null)}><X/></button></div>
+              <div className="modal-body">
+                 <div className="inp-group">
+                    <label>Prazo</label>
+                    <input className="inp-proc" value={editingItem.contexto || ''} onChange={e => setEditingItem({...editingItem, contexto: e.target.value})} />
                  </div>
-                 <div className="input-group-vfinal">
-                    <label>Responsável Padrão</label>
-                    <input className="input-vfinal" value={editingItem.responsavel || ''} onChange={e => setEditingItem({...editingItem, responsavel: e.target.value})} />
+                 <div className="inp-group">
+                    <label>Título / Etapa</label>
+                    <input className="inp-proc" value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value})} />
                  </div>
-                 <div className="input-group-vfinal">
+                 <div className="inp-group">
+                    <label>Responsável</label>
+                    <input className="inp-proc" value={editingItem.responsavel || ''} onChange={e => setEditingItem({...editingItem, responsavel: e.target.value})} />
+                 </div>
+                 <div className="inp-group">
                     <label>Descrição Detalhada</label>
-                    <textarea className="input-vfinal" rows={6} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} />
+                    <textarea className="inp-proc" rows={5} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} />
                  </div>
               </div>
-              <div className="modal-footer-vfinal">
-                 <button className="btn-vfinal silver" onClick={() => setEditingItem(null)}>Cancelar</button>
-                 <button className="btn-vfinal primary" onClick={async () => {
+              <div className="modal-footer">
+                 <button className="btn-std silver" onClick={() => setEditingItem(null)}>Cancelar</button>
+                 <button className="btn-std primary" onClick={async () => {
                     await supabase.from('checklist_itens').update(editingItem).eq('id', editingItem.id)
                     setItens(prev => prev.map(i => i.id === editingItem.id ? editingItem : i))
                     setEditingItem(null)
@@ -260,68 +234,64 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
       )}
 
       <style jsx>{`
-        .checklist-vfinal-container { display: flex; flex-direction: column; gap: 20px; animation: fadeIn 0.4s ease; padding-bottom: 50px; }
-        .glass { background: rgba(10, 10, 20, 0.95); backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
+        .checklist-standalone-container { display: flex; flex-direction: column; gap: 20px; animation: fadeIn 0.5s ease; padding-bottom: 50px; color: #fff; }
+        .glass { background: rgba(10, 10, 20, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; box-shadow: 0 15px 50px rgba(0,0,0,0.5); }
         
-        .header-vfinal { display: flex; justify-content: space-between; align-items: center; padding: 24px; }
-        .header-vfinal-left { display: flex; align-items: center; gap: 16px; flex: 1; }
-        .brand-badge { width: 50px; height: 50px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 14px; display: flex; align-items: center; justify-content: center; }
-        
-        .title-area { flex: 1; display: flex; flex-direction: column; }
-        .title-input-edit { background: transparent; border: none; font-size: 28px; font-weight: 900; color: #fff; outline: none; border-bottom: 2px solid transparent; width: 90%; transition: 0.3s; }
-        .title-input-edit:focus { border-color: #4f7cff; }
-        .title-area span { font-size: 11px; color: #6e6e80; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
+        .header-std { display: flex; justify-content: space-between; align-items: center; padding: 24px 30px; }
+        .header-std-left { display: flex; align-items: center; gap: 20px; flex: 1; }
+        .brand-logo { width: 52px; height: 52px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 30px rgba(79,124,255,0.4); }
+        .title-block { flex: 1; display: flex; flex-direction: column; }
+        .main-title-input { background: transparent; border: none; font-size: 30px; font-weight: 900; color: #fff; outline: none; border-bottom: 2px solid transparent; width: 90%; transition: 0.3s; }
+        .main-title-input:focus { border-color: #4f7cff; }
+        .subtitle { font-size: 11px; color: #6e6e80; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
 
-        .header-vfinal-right { display: flex; gap: 12px; align-items: center; }
-        .turma-selector-mini { background: rgba(255,255,255,0.06); padding: 0 12px; border-radius: 12px; height: 46px; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 8px; }
-        .turma-selector-mini select { background: transparent; border: none; color: #fff; font-weight: 700; font-size: 14px; outline: none; cursor: pointer; }
+        .btn-std { display: flex; align-items: center; gap: 10px; padding: 12px 24px; border-radius: 14px; font-size: 15px; font-weight: 800; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: 0.2s; }
+        .btn-std.primary { background: #4f7cff; color: #fff; box-shadow: 0 4px 20px rgba(79,124,255,0.3); }
+        .btn-std.silver { background: rgba(255,255,255,0.05); color: #fff; }
+        .btn-std:hover { transform: translateY(-3px); filter: brightness(1.2); }
 
-        .btn-vfinal { display: flex; align-items: center; gap: 10px; padding: 12px 24px; border-radius: 14px; font-size: 15px; font-weight: 800; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: 0.2s; }
-        .btn-vfinal.primary { background: #4f7cff; color: #fff; }
-        .btn-vfinal.silver { background: rgba(255,255,255,0.05); color: #fff; }
-        .btn-vfinal:hover { transform: translateY(-3px); filter: brightness(1.2); }
+        .proc-viewport { overflow: auto; max-height: 80vh; background: rgba(0,0,0,0.4); }
+        .proc-table { width: 100%; border-collapse: collapse; min-width: 1400px; }
+        .th-proc { position: sticky; top: 0; background: #080811; padding: 20px; font-size: 12px; color: #6e6e80; font-weight: 900; text-transform: uppercase; text-align: left; z-index: 10; border-bottom: 3px solid #252545; }
+        .row-proc:hover { background: rgba(255,255,255,0.03); }
+        .cell-proc { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; vertical-align: top; color: #e0e0e6; }
+        
+        .deadline-txt { font-weight: 800; color: #fff; width: 150px; }
+        .resp-txt { color: #4f7cff; font-weight: 800; width: 150px; }
+        .desc-txt { color: #8a8a9c; font-size: 12px; line-height: 1.8; max-width: 600px; white-space: pre-wrap; font-family: inherit; }
+        .font-bold { font-weight: 900; color: #fff; }
+        
+        .n-pill { background: rgba(255,255,255,0.08); padding: 5px 12px; border-radius: 8px; font-weight: 900; font-size: 13px; color: #4f7cff; }
+        .trash-btn { background: none; border: none; color: #ff4d6a; opacity: 0; cursor: pointer; transition: 0.2s; margin-top: 10px; }
+        .row-proc:hover .trash-btn { opacity: 0.6; }
+        
+        .title-edit-wrap { display: flex; justify-content: space-between; align-items: start; gap: 10px; width: 250px; }
+        .pencil-btn { background: none; border: none; color: #4f7cff; opacity: 0; cursor: pointer; transition: 0.3s; }
+        .row-proc:hover .pencil-btn { opacity: 0.9; }
 
-        .table-viewport-vfinal { overflow: auto; max-height: 80vh; background: rgba(0,0,0,0.3); }
-        .table-vfinal { width: 100%; border-collapse: collapse; min-width: 1400px; }
-        .th-vfinal { position: sticky; top: 0; background: #0a0a14; padding: 20px 16px; font-size: 12px; color: #6e6e80; font-weight: 900; text-transform: uppercase; text-align: left; z-index: 10; border-bottom: 2px solid #252540; }
-        .tr-vfinal:hover { background: rgba(255,255,255,0.03); }
-        .td-vfinal { padding: 18px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; vertical-align: top; color: #e0e0e6; }
+        .inp-proc { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; color: #fff; width: 100%; outline: none; font-size: 14px; transition: 0.2s; }
+        .inp-proc:focus { border-color: #4f7cff; background: rgba(79,124,255,0.08); }
+        .status-fill { font-weight: 800; color: #10d98c; border-color: rgba(16, 217, 140, 0.3); }
         
-        .prazo-txt { font-weight: 700; color: #fff; }
-        .blue-txt { color: #4f7cff; font-weight: 800; }
-        .desc-txt { color: #8a8a9c; font-size: 12px; line-height: 1.7; max-width: 500px; white-space: pre-wrap; }
-        
-        .n-badge { background: rgba(255,255,255,0.05); padding: 5px 10px; border-radius: 8px; font-weight: 900; font-size: 12px; color: #4f7cff; }
-        .del-btn-vfinal { background: none; border: none; color: #ff4d6a; opacity: 0; cursor: pointer; transition: 0.2s; }
-        .tr-vfinal:hover .del-btn-vfinal { opacity: 0.5; }
-        
-        .edit-wrap-vfinal { display: flex; justify-content: space-between; align-items: start; gap: 10px; }
-        .mini-edit-btn { background: none; border: none; color: #4f7cff; opacity: 0; cursor: pointer; transition: 0.3s; }
-        .tr-vfinal:hover .mini-edit-btn { opacity: 0.8; }
+        .status-inp-wrap { position: relative; width: 200px; }
+        .saving-box { position: absolute; top: -10px; right: -10px; background: #4f7cff; border-radius: 50%; padding: 5px; box-shadow: 0 0 15px rgba(79,124,255,0.5); }
 
-        .input-vfinal { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; color: #fff; width: 100%; outline: none; font-size: 14px; transition: 0.2s; }
-        .input-vfinal:focus { border-color: #4f7cff; background: rgba(79,124,255,0.08); }
-        .status-txt-input { font-weight: 800; color: #10d98c; border-color: rgba(16, 217, 140, 0.2); }
-        
-        .status-container-vfinal { position: relative; }
-        .loader-vfinal { position: absolute; top: -8px; right: -8px; background: #4f7cff; border-radius: 50%; padding: 4px; }
-
-        .footer-vfinal { padding: 30px; display: flex; justify-content: center; }
-        .add-btn-vfinal { display: flex; align-items: center; gap: 10px; padding: 15px 30px; border-radius: 16px; background: rgba(255,255,255,0.04); border: 2px dashed rgba(255,255,255,0.2); color: #9494a3; font-weight: 800; cursor: pointer; transition: 0.3s; }
-        .add-btn-vfinal:hover { border-color: #4f7cff; color: #fff; background: rgba(79,124,255,0.1); }
+        .add-footer { padding: 30px; display: flex; justify-content: center; }
+        .add-btn-flat { display: flex; align-items: center; gap: 12px; padding: 16px 36px; border-radius: 18px; background: rgba(255,255,255,0.04); border: 2px dashed rgba(255,255,255,0.2); color: #9494a3; font-weight: 800; cursor: pointer; transition: 0.3s; }
+        .add-btn-flat:hover { border-color: #4f7cff; color: #fff; background: rgba(79,124,255,0.1); transform: scale(1.05); }
 
         /* MODAL */
-        .overlay-vfinal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-        .modal-vfinal { width: 650px; overflow: hidden; }
-        .modal-header-vfinal { padding: 30px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; }
-        .modal-body-vfinal { padding: 30px; display: flex; flex-direction: column; gap: 20px; }
-        .input-group-vfinal { display: flex; flex-direction: column; gap: 8px; }
-        .input-group-vfinal label { font-size: 11px; font-weight: 800; color: #6e6e80; text-transform: uppercase; }
-        .modal-footer-vfinal { padding: 25px 30px; display: flex; justify-content: flex-end; gap: 15px; background: rgba(255,255,255,0.02); }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-box { width: 700px; box-shadow: 0 30px 70px rgba(0,0,0,0.6); overflow: hidden; }
+        .modal-header { padding: 30px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; }
+        .modal-body { padding: 30px; display: flex; flex-direction: column; gap: 20px; }
+        .inp-group { display: flex; flex-direction: column; gap: 8px; }
+        .inp-group label { font-size: 11px; font-weight: 900; color: #6e6e80; text-transform: uppercase; letter-spacing: 1px; }
+        .modal-footer { padding: 25px 30px; display: flex; justify-content: flex-end; gap: 15px; background: rgba(255,255,255,0.02); }
 
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; } }
       `}</style>
     </div>
   )
