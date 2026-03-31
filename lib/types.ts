@@ -77,6 +77,8 @@ export interface AuditLog {
 export interface ChecklistItem {
   id: string
   titulo: string
+  responsavel: string | null
+  contexto: string | null
   tipo_campo: 'check' | 'texto' | 'data'
   ordem: number
   created_at: string
