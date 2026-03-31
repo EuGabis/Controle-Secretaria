@@ -285,7 +285,15 @@ export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, 
     const tarefa = tarefas.find(t => t.id === id)
     if (!tarefa || tarefa.status === newStatus) return
 
-    const newProgress = newStatus === 'a_fazer' ? 0 : newStatus === 'feito' ? 100 : tarefa.progresso || 50
+    let newProgress = tarefa.progresso || 0
+    if (newStatus === 'a_fazer') {
+      newProgress = 0
+    } else if (newStatus === 'feito') {
+      newProgress = 100
+    } else if (newStatus === 'fazendo' && (tarefa.status === 'feito' || tarefa.progresso === 100)) {
+      // Se estava concluída e voltou para fazendo, resetamos para 50%
+      newProgress = 50
+    }
     
     // Feature: 'Andar com a data' ao mover para 'Fazendo'
     let newDataLimite = tarefa.data_limite
