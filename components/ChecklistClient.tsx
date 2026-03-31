@@ -174,16 +174,47 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
       {editingItem && (
         <div className="overlay-v8" onClick={() => setEditingItem(null)}>
            <div className="modal-v8 glass" onClick={e => e.stopPropagation()}>
-              <div className="m-h"><h3>EDITAR ETAPA #{editingItem.item_n}</h3><button onClick={() => setEditingItem(null)} style={{background:'none', border:'none', color:'#fff', cursor:'pointer'}}><X/></button></div>
-              <div className="m-b">
-                 <input className="inp-v8" value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value.toUpperCase()})} placeholder="TÍTULO" />
-                 <textarea className="inp-v8" rows={6} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} placeholder="DESCRIÇÃO OU LINKS" />
+              <div className="m-h">
+                 <h3>EDITAR ETAPA #{editingItem.item_n}</h3>
+                 <button onClick={() => setEditingItem(null)} style={{background:'none', border:'none', color:'#fff', cursor:'pointer'}}><X/></button>
+              </div>
+              <div className="m-b" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                 <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr', gap: '10px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                       <label style={{ fontSize: '10px', fontWeight: '800', color: '#666' }}>Nº ORDEM</label>
+                       <input className="inp-v8" type="number" value={editingItem.item_n} onChange={e => setEditingItem({...editingItem, item_n: parseInt(e.target.value)})} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                       <label style={{ fontSize: '10px', fontWeight: '800', color: '#666' }}>PRAZO / META</label>
+                       <input className="inp-v8" value={editingItem.contexto || ''} onChange={e => setEditingItem({...editingItem, contexto: e.target.value.toUpperCase()})} placeholder="EX: D-10" />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                       <label style={{ fontSize: '10px', fontWeight: '800', color: '#666' }}>RESPONSÁVEL</label>
+                       <input className="inp-v8" value={editingItem.responsavel || ''} onChange={e => setEditingItem({...editingItem, responsavel: e.target.value.toUpperCase()})} placeholder="QUEM FAZ?" />
+                    </div>
+                 </div>
+
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '10px', fontWeight: '800', color: '#666' }}>TÍTULO DA ETAPA</label>
+                    <input className="inp-v8" value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value.toUpperCase()})} placeholder="NOME DA TAREFA" />
+                 </div>
+
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '10px', fontWeight: '800', color: '#666' }}>DESCRIÇÃO DETALHADA / LINKS</label>
+                    <textarea className="inp-v8" rows={6} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} placeholder="DETALHE O PROCESSO OU COLE LINKS AQUI" />
+                 </div>
               </div>
               <div className="m-f">
                  <button className="btn-v8 primary" onClick={async () => {
-                    await supabase.from('checklist_itens').update(editingItem).eq('id', editingItem.id)
+                    await supabase.from('checklist_itens').update({
+                      item_n: editingItem.item_n,
+                      titulo: editingItem.titulo,
+                      contexto: editingItem.contexto,
+                      responsavel: editingItem.responsavel,
+                      descricao: editingItem.descricao
+                    }).eq('id', editingItem.id)
                     setItens(prev => prev.map(i => i.id === editingItem.id ? editingItem : i)); setEditingItem(null)
-                 }}><Save size={16}/> SALVAR MUDANÇAS</button>
+                 }}><Save size={16}/> SALVAR MUDANÇAS NO ITEM</button>
               </div>
            </div>
         </div>
