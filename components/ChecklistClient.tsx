@@ -283,7 +283,7 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
       )}
 
       <style jsx>{`
-        .checklist-full-config-container { display: flex; flex-direction: column; gap: 15px; animation: fadeIn 0.4s ease; padding-bottom: 50px; color: #fff; }
+        .checklist-full-config-container { display: flex; flex-direction: column; gap: 15px; animation: fadeIn 0.4s ease; padding-bottom: 50px; color: #fff; text-transform: uppercase; }
         .glass { background: rgba(8, 8, 16, 0.98); backdrop-filter: blur(25px); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; }
         
         .h-v7 { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-radius: 14px; }
@@ -291,11 +291,11 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         .h-v7-badge { width: 42px; height: 42px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(79,124,255,0.2); }
         .h-v7-info { flex: 1; }
         .h-v7-title-row { display: flex; align-items: center; gap: 10px; }
-        .h-v7-title-input { background: transparent; border: none; font-size: 18px; font-weight: 800; color: #fff; outline: none; width: 450px; border-bottom: 2px solid transparent; }
+        .h-v7-title-input { background: transparent; border: none; font-size: 18px; font-weight: 800; color: #fff; outline: none; width: 450px; border-bottom: 2px solid transparent; text-transform: uppercase; }
         .h-v7-title-input:focus { border-color: #4f7cff; }
         .h-v7-sub-input { background: transparent; border: none; font-size: 10px; color: #6e6e80; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; outline: none; width: 100%; }
 
-        .h-btn-v7 { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid rgba(255,255,255,0.06); transition: 0.2s; }
+        .h-btn-v7 { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid rgba(255,255,255,0.06); transition: 0.2s; text-transform: uppercase; }
         .h-btn-v7.primary { background: #4f7cff; color: #fff; border: none; }
         .h-btn-v7.silver { background: rgba(255,255,255,0.04); color: #fff; }
         .h-btn-v7:hover { transform: translateY(-2px); filter: brightness(1.1); }
@@ -306,10 +306,10 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         .table-v7 { width: 100%; border-collapse: collapse; min-width: 1450px; }
         .th-v7 { position: sticky; top: 0; background: #080811; padding: 14px; font-size: 10px; color: #6e6e80; font-weight: 800; text-transform: uppercase; text-align: left; z-index: 10; border-bottom: 2px solid #202035; }
         .tr-v7:hover { background: rgba(255,255,255,0.02); }
-        .td-v7 { padding: 14px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; vertical-align: top; }
+        .td-v7 { padding: 14px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; vertical-align: top; text-transform: uppercase; }
         
         .blue { color: #4f7cff; }
-        .desc-v7 { color: #8a8a9c; font-size: 11px; line-height: 1.6; max-width: 550px; white-space: pre-wrap; }
+        .desc-v7 { color: #8a8a9c; font-size: 11px; line-height: 1.6; max-width: 550px; white-space: pre-wrap; text-transform: uppercase; }
         .font-bold { font-weight: 700; }
         .color-w { color: #fff; }
         
@@ -322,15 +322,15 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         .pencil-v7 { background: none; border: none; color: #4f7cff; opacity: 0; cursor: pointer; transition: 0.2s; }
         .tr-v7:hover .pencil-v7 { opacity: 0.8; }
 
-        .inp-v7 { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; color: #fff; width: 100%; outline: none; font-size: 13px; transition: 0.2s; }
+        .inp-v7 { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; color: #fff; width: 100%; outline: none; font-size: 13px; transition: 0.2s; text-transform: uppercase; }
         .inp-v7:focus { border-color: #4f7cff; background: rgba(79,124,255,0.06); }
-        .green-txt { color: #10d98c; font-weight: 700; border-color: rgba(16, 217, 140, 0.1); }
+        .green-txt { color: #10d98c; font-weight: 700; border-color: rgba(16, 217, 140, 0.1); text-transform: uppercase; }
         
         .status-v7 { position: relative; width: 220px; }
         .save-v7 { position: absolute; top: -8px; right: -8px; background: #4f7cff; border-radius: 50%; padding: 4px; box-shadow: 0 0 10px rgba(79,124,255,0.4); }
 
         .footer-v7 { padding: 20px; display: flex; justify-content: center; }
-        .add-v7 { padding: 12px 24px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1.5px dashed rgba(255,255,255,0.1); color: #9494a3; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .add-v7 { padding: 12px 24px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1.5px dashed rgba(255,255,255,0.1); color: #9494a3; font-weight: 700; cursor: pointer; transition: 0.2s; text-transform: uppercase; }
         .add-v7:hover { border-color: #4f7cff; color: #fff; }
 
         /* MODAL */

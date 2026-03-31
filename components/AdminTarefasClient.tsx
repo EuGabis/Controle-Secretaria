@@ -215,7 +215,17 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
         ))}
       </div>
 
-      <KanbanBoard key={`${selectedUser}-${selectedStatus}`} tarefas={filteredTarefas} isAdmin={true} onEdit={handleEdit} />
+      <KanbanBoard 
+        key={`${selectedUser}-${selectedStatus}-${selectedTipo}`} 
+        tarefas={filteredTarefas} 
+        isAdmin={true} 
+        onEdit={handleEdit} 
+        onUpdate={async () => {
+          // Recarrega as tarefas do banco para garantir sincronia total em todos os filtros
+          const { data } = await supabase.from('tarefas').select('*, usuario:usuarios!usuario_id(*)').order('created_at', { ascending: false })
+          if (data) setTarefas(data)
+        }}
+      />
 
       {/* Modal */}
       {showModal && (
