@@ -142,20 +142,18 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
             )}
           </div>
 
-          {/* Date */}
-          {(!tarefa.tipo || tarefa.tipo === 'normal') && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
-              {atrasada ? (
-                <Clock size={12} color="var(--accent-red)" />
-              ) : (
-                <Calendar size={12} color="var(--text-muted)" />
-              )}
-              <span style={{ fontSize: '11px', color: atrasada ? 'var(--accent-red)' : 'var(--text-muted)' }}>
-                {format(parseISO(tarefa.data_limite), "dd 'de' MMM 'de' yyyy", { locale: ptBR })}
-                {atrasada && ' • Atrasada'}
-              </span>
-            </div>
-          )}
+          {/* Date (Fix: Always show for all types) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
+            {atrasada ? (
+              <Clock size={12} color="var(--accent-red)" />
+            ) : (
+              <Calendar size={12} color="var(--text-muted)" />
+            )}
+            <span style={{ fontSize: '11px', color: atrasada ? 'var(--accent-red)' : 'var(--text-muted)' }}>
+              {format(parseISO(tarefa.data_limite), "dd 'de' MMM 'de' yyyy", { locale: ptBR })}
+              {atrasada && ' • Atrasada'}
+            </span>
+          </div>
 
           {/* Expand */}
           <button
@@ -288,6 +286,18 @@ export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, 
     if (!tarefa || tarefa.status === newStatus) return
 
     const newProgress = newStatus === 'a_fazer' ? 0 : newStatus === 'feito' ? 100 : tarefa.progresso || 50
+    
+    // Feature: 'Andar com a data' ao mover para 'Fazendo'
+    let newDataLimite = tarefa.data_limite
+    if (newStatus === 'fazendo') {
+      const hojeStr = new Date().toISOString().split('T')[0]
+      // Se estiver atrasada ou sem data, damos 3 dias de prazo novo
+      if (isAfter(new Date(), parseISO(tarefa.data_limite)) || !tarefa.data_limite) {
+        const novaData = new Date()
+        novaData.setDate(novaData.getDate() + 3)
+        newDataLimite = novaData.toISOString().split('T')[0]
+      }
+    }
 
     await supabase.from('follow_up_log').insert({
       tarefa_id: id,
@@ -296,7 +306,11 @@ export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, 
       status_novo: newStatus,
     })
 
-    const { error } = await supabase.from('tarefas').update({ status: newStatus, progresso: newProgress }).eq('id', id)
+    const { error } = await supabase.from('tarefas').update({ 
+      status: newStatus, 
+      progresso: newProgress,
+      data_limite: newDataLimite 
+    }).eq('id', id)
 
     if (error) {
       alert(`Erro ao alterar status da tarefa: ${error.message}\nVerifique as restrições (constraints) do seu banco Supabase.`)
@@ -304,7 +318,7 @@ export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, 
     }
 
     setTarefas(prev => prev.map(t =>
-      t.id === id ? { ...t, status: newStatus, progresso: newProgress, ...(novaObs !== undefined ? { observacao: novaObs } : {}) } : t
+      t.id === id ? { ...t, status: newStatus, progresso: newProgress, data_limite: newDataLimite, ...(novaObs !== undefined ? { observacao: novaObs } : {}) } : t
     ))
     onUpdate?.()
   }, [tarefas, supabase, onUpdate])

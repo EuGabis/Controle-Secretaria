@@ -9,7 +9,7 @@ import {
   LayoutDashboard, CheckSquare, Bell, ArrowUpDown,
   LogOut, ChevronRight, Shield, User, Users,
   ListTodo, Calendar, CalendarDays, Repeat, RefreshCw,
-  Menu, X, MessageSquare, ShieldAlert
+  Menu, X, MessageSquare, ShieldAlert, ClipboardCheck
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 
@@ -65,8 +65,8 @@ export default function Sidebar({ user }: SidebarProps) {
   }
 
   const adminLinks = [
-    { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/dashboard/tarefas', icon: CheckSquare, label: 'Tarefas' },
+    { href: '/dashboard/checklist', icon: ClipboardCheck, label: 'Checklist MMA' },
     { href: '/dashboard/usuarios', icon: Users, label: 'Usuários' },
     { href: '/dashboard/feedbacks', icon: MessageSquare, label: 'Feedbacks' },
     { href: '/dashboard/follow-up', icon: ArrowUpDown, label: 'Follow Up' },
@@ -79,6 +79,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
   const userLinks = [
     { href: '/dashboard/minhas-tarefas', icon: ListTodo, label: 'Todas Tarefas', exact: true },
+    { href: '/dashboard/checklist', icon: ClipboardCheck, label: 'Checklist MMA' },
     { href: '/dashboard/minhas-tarefas?tipo=diaria', icon: RefreshCw, label: 'Diárias', tipo: 'diaria', isSub: true },
     { href: '/dashboard/minhas-tarefas?tipo=semanal', icon: Calendar, label: 'Semanais', tipo: 'semanal', isSub: true },
     { href: '/dashboard/minhas-tarefas?tipo=mensal', icon: CalendarDays, label: 'Mensais', tipo: 'mensal', isSub: true },

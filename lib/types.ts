@@ -73,3 +73,28 @@ export interface AuditLog {
   created_at: string
   ator?: { nome: string }
 }
+
+export interface ChecklistItem {
+  id: string
+  titulo: string
+  contexto: string | null
+  ordem: number
+  created_at: string
+}
+
+export interface ChecklistTurma {
+  id: string
+  nome: string
+  ativa: boolean
+  created_at: string
+}
+
+export interface ChecklistResposta {
+  id: string
+  item_id: string
+  turma_id: string
+  status: 'OK' | 'N/A' | 'PENDENTE'
+  respondido_por: string | null
+  updated_at: string
+  autor?: Usuario
+}
