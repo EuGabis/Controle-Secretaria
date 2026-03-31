@@ -70,6 +70,9 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
   const [respostas, setRespostas] = useState(initialRespostas)
   const [selectedTurmaId, setSelectedTurmaId] = useState<string>(initialTurmas[0]?.id || '')
   
+  // Título Editável para Exportação
+  const [customTitle, setCustomTitle] = useState('')
+  
   const [saving, setSaving] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null)
   const [isExporting, setIsExporting] = useState(false)
@@ -78,7 +81,12 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
   const isAdmin = perfil === 'admin' || perfil === 'master'
   const supabase = createClient()
 
-  // Mapeamento de respostas
+  // Sincroniza o título padrão quando a turma muda
+  useEffect(() => {
+    const turma = turmas.find(t => t.id === selectedTurmaId)
+    if (turma) setCustomTitle(`Acompanhamento Imersão - ${turma.nome}`)
+  }, [selectedTurmaId, turmas])
+
   const turmaRespostasMap = useMemo(() => {
     const map: Record<string, ChecklistResposta> = {}
     respostas.filter(r => r.turma_id === selectedTurmaId).forEach(r => {
@@ -103,6 +111,7 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
     })
   }
 
+  // LOGICA DE SALVAMENTO COM FEEDBACK INSTANTÂNEO
   const saveCell = useCallback(async (itemId: string, updates: Partial<ChecklistResposta>) => {
     if (!selectedTurmaId) return
     const key = `cell-${itemId}`
@@ -110,26 +119,35 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
     
     const existing = turmaRespostasMap[itemId]
 
+    // Otimista: Atualiza o estado local antes de ir pro banco
     if (existing) {
-      const { data, error } = await supabase
+       setRespostas(prev => prev.map(r => r.id === existing.id ? { ...r, ...updates } : r))
+       
+       const { data, error } = await supabase
         .from('checklist_respostas')
         .update({ ...updates, respondido_por: usuarioId, updated_at: new Date().toISOString() })
         .eq('id', existing.id)
         .select().single()
-      if (!error && data) setRespostas(prev => prev.map(r => r.id === existing.id ? { ...r, ...data } : r))
+        
+       if (error) console.error("Erro ao atualizar status:", error)
     } else {
       const { data, error } = await supabase
         .from('checklist_respostas')
         .insert({ item_id: itemId, turma_id: selectedTurmaId, ...updates, respondido_por: usuarioId })
         .select().single()
-      if (!error && data) setRespostas(prev => [...prev, data])
+
+      if (!error && data) {
+        setRespostas(prev => [...prev, data])
+      } else if (error) {
+        console.error("Erro ao inserir status:", error)
+      }
     }
-    setTimeout(() => setSaving(null), 600)
+    
+    setTimeout(() => setSaving(null), 500)
   }, [turmaRespostasMap, selectedTurmaId, supabase, usuarioId])
 
   const handleImportInitialData = async () => {
     if (!isAdmin || !confirm('Isso irá importar os 41 itens do modelo original. Deseja prosseguir?')) return
-    
     setIsImporting(true)
     for (const data of IMERSAO_TEMPLATE) {
       const { data: newItem, error } = await supabase
@@ -144,7 +162,6 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
           ordem: data.n - 1
         })
         .select().single()
-      
       if (!error && newItem) {
         setItens(prev => {
           if (prev.find(i => i.item_n === newItem.item_n)) return prev
@@ -153,15 +170,13 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
       }
     }
     setIsImporting(false)
-    alert('Importação concluída com sucesso!')
   }
 
   const exportToCSV = () => {
-    const selectedTurma = turmas.find(t => t.id === selectedTurmaId)
-    if (!selectedTurma) return
     setIsExporting(true)
-    
     const rows = [
+      ['RELATÓRIO:', customTitle],
+      [],
       ['ITEM', 'PRAZO', 'RESPONSÁVEL', 'ETAPA', 'DESCRIÇÃO', 'DATA REALIZADA', 'STATUS'],
       ...itens.map(item => {
         const resp = turmaRespostasMap[item.id]
@@ -181,7 +196,7 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement("a")
     link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `checklist_${selectedTurma.nome.toLowerCase().replace(/\s/g, '_')}.csv`)
+    link.setAttribute("download", `${customTitle.toLowerCase().replace(/\s/g, '_')}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -191,7 +206,6 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
   const handleUpdateItemTemplate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingItem || !isAdmin) return
-    
     setSaving(`modal-${editingItem.id}`)
     const { error } = await supabase.from('checklist_itens').update({
       titulo: editingItem.titulo,
@@ -212,9 +226,14 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
       <div className="checklist-header">
         <div className="header-info">
           <div className="icon-wrapper"><Settings2 size={24} color="#fff" /></div>
-          <div>
-            <h1 className="text-gradient">Acompanhamento Imersão</h1>
-            <p>Selecione a turma para gerenciar o checklist detalhado</p>
+          <div className="title-area">
+            <input 
+              className="editable-title-input"
+              value={customTitle}
+              onChange={(e) => setCustomTitle(e.target.value)}
+              placeholder="Digite o título do relatório..."
+            />
+            <p>Edite o título acima para personalizar o arquivo de exportação</p>
           </div>
         </div>
 
@@ -305,7 +324,11 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                       <div className="status-container">
                         <button 
                           className={`status-btn ${resp?.status_check ? 'active' : ''}`}
-                          onClick={() => saveCell(item.id, { status_check: !resp?.status_check })}
+                          onClick={() => {
+                             // Toggle status logic
+                             const currentStatus = resp?.status_check || false;
+                             saveCell(item.id, { status_check: !currentStatus });
+                          }}
                         >
                           {resp?.status_check ? <CheckCircle2 size={24} /> : <Circle size={24} />}
                           <span>{resp?.status_check ? 'OK' : 'Pendente'}</span>
@@ -379,9 +402,12 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         .checklist-header { display: flex; justify-content: space-between; align-items: center; }
         .header-info { display: flex; align-items: center; gap: 16px; }
         .icon-wrapper { width: 44px; height: 44px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(79,124,255,0.3); }
-        .checklist-header h1 { font-size: 24px; font-weight: 800; margin: 0; color: #fff; }
-        .checklist-header p { color: var(--text-muted); font-size: 13px; margin: 0; }
         
+        .title-area { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+        .editable-title-input { background: transparent; border: none; font-size: 24px; font-weight: 800; color: #fff; outline: none; padding: 0; width: 100%; border-bottom: 1.5px solid transparent; transition: 0.3s; }
+        .editable-title-input:focus { border-color: #4f7cff; }
+        .title-area p { color: var(--text-muted); font-size: 11px; margin: 0; }
+
         .header-controls { display: flex; gap: 12px; align-items: center; }
         .turma-selector-wrapper { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; padding: 0 12px; height: 42px; transition: 0.2s; }
         .turma-selector-wrapper:focus-within { border-color: #4f7cff; background: rgba(79,124,255,0.05); }
@@ -430,14 +456,10 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         .link-text:hover { border-color: #4f7cff; background: rgba(79,124,255,0.1); border-radius: 2px; }
 
         .date-input-borderless { background: rgba(255,255,255,0.03); border: 1px solid transparent; color: #fff; padding: 8px; border-radius: 8px; width: 100%; outline: none; transition: 0.2s; cursor: pointer; }
-        .date-input-borderless:hover { background: rgba(255,255,255,0.06); }
-        .date-input-borderless:focus { border-color: #4f7cff; background: rgba(79,124,255,0.05); }
-
         .status-container { position: relative; width: 100%; }
         .status-btn { width: 100%; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid transparent; color: #6e6e80; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: 0.3s; }
         .status-btn.active { background: rgba(16, 217, 140, 0.1); border-color: rgba(16, 217, 140, 0.2); color: #10d98c; }
         .status-btn:not(.active):hover { background: rgba(255,255,255,0.08); color: #fff; }
-        .status-btn.active:hover { filter: brightness(1.2); }
         
         .saving-dot { position: absolute; top: -5px; right: -5px; color: #4f7cff; }
 
@@ -450,7 +472,6 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         .form-group { display: flex; flex-direction: column; gap: 8px; }
         .form-group label { font-size: 12px; font-weight: 700; color: #6e6e80; text-transform: uppercase; letter-spacing: 0.05em; }
         .form-group input, .form-group textarea { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 12px; padding: 12px; color: #fff; font-size: 14px; outline: none; transition: 0.2s; }
-        .form-group input:focus, .form-group textarea:focus { border-color: #4f7cff; background: rgba(79,124,255,0.05); }
         .modal-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 12px; }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
