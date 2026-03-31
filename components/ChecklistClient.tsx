@@ -10,8 +10,6 @@ import {
   Download, Filter, Search, Info, DatabaseZap,
   Check, AlertCircle, HelpCircle, Trash
 } from 'lucide-react'
-import { format, parseISO } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 
 interface Props {
   itens: ChecklistItem[]
@@ -21,7 +19,7 @@ interface Props {
   usuarioId: string
 }
 
-// Modelo Original para Importação (se a tabela estiver vazia)
+// Modelo Original (Backup para importação)
 const IMERSAO_TEMPLATE = [
   { n: 1, p: 'PARA ACERTO DE DATA', r: 'MOACIR NETO', t: 'Agendar com equipe', d: 'Ver data com a empresa a ser visitada / Verificar com Marcos Paulo se a data é possível para ele' },
   { n: 2, p: 'QUANDO CONFIRMAR DATA', r: 'MOACIR NETO', t: 'Selecionar turmas', d: 'Verificar quais são as turmas que podem se inscrever nesta imersão, escrever na lousa para o Bruno saber' },
@@ -69,26 +67,21 @@ const IMERSAO_TEMPLATE = [
 export default function ChecklistClient({ itens: initialItens, turmas: initialTurmas, respostas: initialRespostas, perfil, usuarioId }: Props) {
   const [itens, setItens] = useState(initialItens)
   const [respostas, setRespostas] = useState(initialRespostas)
-  const [turmas, setTurmas] = useState(initialTurmas)
   const [selectedTurmaId, setSelectedTurmaId] = useState<string>(initialTurmas[0]?.id || '')
-  
   const [customTitle, setCustomTitle] = useState('')
   const [saving, setSaving] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null)
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
-  const [isAddingItem, setIsAddingItem] = useState(false)
   
   const isAdmin = perfil === 'admin' || perfil === 'master'
   const supabase = createClient()
 
-  // Sincroniza título padrão
   useEffect(() => {
-    const turma = turmas.find(t => t.id === selectedTurmaId)
+    const turma = initialTurmas.find(t => t.id === selectedTurmaId)
     if (turma && !customTitle) setCustomTitle(`Acompanhamento Imersão - ${turma.nome}`)
-  }, [selectedTurmaId, turmas, customTitle])
+  }, [selectedTurmaId, initialTurmas, customTitle])
 
-  // Map de respostas para acesso rápido
   const turmaRespostasMap = useMemo(() => {
     const map: Record<string, ChecklistResposta> = {}
     respostas.filter(r => r.turma_id === selectedTurmaId).forEach(r => {
@@ -97,87 +90,65 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
     return map
   }, [respostas, selectedTurmaId])
 
-  const linkify = (text: string) => {
-    if (!text) return null
-    const urlRegex = /(https?:\/\/[^\s]+)/g
-    return text.split(urlRegex).map((part, i) => {
-      if (part.match(urlRegex)) {
-        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="link-text">{part.length > 30 ? part.substring(0, 30) + '...' : part}</a>
-      }
-      return part
-    })
-  }
-
-  // --- LOGICA DE SALVAMENTO (STATUS E DATA) ---
+  // --- FUNÇÃO DE SALVAMENTO BLINDADA (UPSERT) ---
   const saveValue = async (itemId: string, updates: Partial<ChecklistResposta>) => {
     if (!selectedTurmaId) return
-    setSaving(`cell-${itemId}`)
-    
-    const existing = turmaRespostasMap[itemId]
+    const key = `cell-${itemId}`
+    setSaving(key)
 
-    // UPDATE OTIMISTA: Atualiza o estado agora
+    // 1. UPDATE OTIMISTA: Atualiza o estado agora na tela
+    const existing = turmaRespostasMap[itemId]
     if (existing) {
-      setRespostas(prev => prev.map(r => r.id === existing.id ? { ...r, ...updates } : r))
-      const { error } = await supabase.from('checklist_respostas').update({ ...updates, respondido_por: usuarioId, updated_at: new Date().toISOString() }).eq('id', existing.id)
-      if (error) {
-        console.error("Erro no Update:", error)
-        alert("Erro ao salvar! Verifique a conexão.")
-      }
-    } else {
-      const { data, error } = await supabase.from('checklist_respostas').insert({ item_id: itemId, turma_id: selectedTurmaId, ...updates, respondido_por: usuarioId }).select().single()
-      if (!error && data) {
-        setRespostas(prev => [...prev, data])
-      } else {
-        console.error("Erro no Insert:", error)
-        alert("Erro ao salvar! Verifique se rodou o comando SQL no Supabase.")
-      }
+       setRespostas(prev => prev.map(r => r.id === existing.id ? { ...r, ...updates } : r))
     }
+
+    // 2. CONSOLE LOG PARA DEBUG
+    console.log(`Tentando salvar Item ${itemId} com updates:`, updates)
+
+    // 3. UPSERT NO SUPABASE (Lida com insert e update automaticamente)
+    const payload = {
+        item_id: itemId,
+        turma_id: selectedTurmaId,
+        ...updates,
+        respondido_por: usuarioId,
+        updated_at: new Date().toISOString()
+    }
+
+    const { data, error } = await supabase
+        .from('checklist_respostas')
+        .upsert(payload, { onConflict: 'item_id,turma_id' })
+        .select()
+        .single()
+
+    if (error) {
+        console.error("ERRO SUPABASE:", error)
+        alert(`ERRO AO SALVAR STATUS:\n${error.message}\nVerifique se as colunas existem no banco.`)
+        // Opcional: Reverter estado em caso de erro
+    } else if (data && !existing) {
+        setRespostas(prev => [...prev, data])
+    }
+
     setTimeout(() => setSaving(null), 400)
   }
 
-  // --- GESTÃO DE LINHAS (ADD / DELETE) ---
+  // --- GESTÃO DE LINHAS ---
   const handleAddItem = async () => {
     if (!isAdmin) return
-    setIsAddingItem(true)
     const nextN = itens.length > 0 ? Math.max(...itens.map(i => i.item_n)) + 1 : 1
-    
     const { data, error } = await supabase.from('checklist_itens').insert({
-      item_n: nextN,
-      titulo: 'Nova Etapa',
-      contexto: 'Novo Prazo',
-      responsavel: 'Responsável',
-      descricao: '',
-      tipo_campo: 'check',
-      ordem: nextN
+      item_n: nextN, titulo: 'Nova Etapa', contexto: 'Prazo', responsavel: 'Nome', descricao: '', tipo_campo: 'check', ordem: nextN
     }).select().single()
-
-    if (!error && data) {
-      setItens(prev => [...prev, data])
-    } else {
-      alert("Erro ao criar linha no banco.")
-    }
-    setIsAddingItem(false)
+    if (!error && data) setItens(prev => [...prev, data])
   }
 
   const handleDeleteItem = async (id: string) => {
-    if (!isAdmin || !confirm('Deseja excluir esta etapa permanentemente?')) return
-    setSaving(`delete-${id}`)
-    
-    // Primeiro deleta respostas associadas (se não houver cascade no banco)
-    await supabase.from('checklist_respostas').delete().eq('item_id', id)
-    
+    if (!isAdmin || !confirm('Excluir esta linha?')) return
     const { error } = await supabase.from('checklist_itens').delete().eq('id', id)
-    if (!error) {
-      setItens(prev => prev.filter(i => i.id !== id))
-    } else {
-      alert("Erro ao excluir item.")
-    }
-    setSaving(null)
+    if (!error) setItens(prev => prev.filter(i => i.id !== id))
   }
 
-  // --- IMPORTAÇÃO / EXPORTAÇÃO ---
-  const handleImportTemplate = async () => {
-    if (!isAdmin || !confirm('Isso carregará o modelo de 41 etapas. Prosseguir?')) return
+  const handleImport = async () => {
+    if (!isAdmin || !confirm('Importar os 41 itens modelo?')) return
     setIsImporting(true)
     for (const d of IMERSAO_TEMPLATE) {
       const { data, error } = await supabase.from('checklist_itens').insert({
@@ -188,119 +159,80 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
     setIsImporting(false)
   }
 
-  const handleExport = () => {
-    setIsExporting(true)
-    const headers = ['ITEM', 'PRAZO', 'RESPONSÁVEL', 'ETAPA', 'DESCRIÇÃO', 'DATA', 'STATUS']
-    const content = itens.map(i => {
-      const r = turmaRespostasMap[i.id]
-      return [i.item_n, i.contexto, i.responsavel, i.titulo, i.descricao, r?.valor_data || '-', r?.status || 'PENDENTE']
-    })
-    const csv = [headers, ...content].map(r => r.join(';')).join('\n')
-    const link = document.createElement('a')
-    link.href = encodeURI("data:text/csv;charset=utf-8," + "\uFEFF" + csv)
-    link.download = `${customTitle.replace(/\//g, '_')}.csv`
-    link.click()
-    setIsExporting(false)
-  }
-
   return (
     <div className="checklist-v2-container">
-      {/* HEADER SECTION */}
+      {/* HEADER */}
       <div className="checklist-v2-header glass">
         <div className="header-left">
           <div className="brand-badge"><DatabaseZap size={20} /></div>
           <div className="title-stack">
-            <input 
-              className="main-title-input" 
-              value={customTitle} 
-              onChange={e => setCustomTitle(e.target.value)} 
-              placeholder="Nome da Imersão..."
-            />
+            <input className="main-title-input" value={customTitle} onChange={e => setCustomTitle(e.target.value)} />
             <span className="subtitle">Gestor de Processos Lito Academy</span>
           </div>
         </div>
-
         <div className="header-actions">
-          {itens.length === 0 && (
-            <button className="nav-btn primary" onClick={handleImportTemplate} disabled={isImporting}>
-               {isImporting ? <Loader2 className="spin" size={16} /> : <DatabaseZap size={16} />} Importar Base
-            </button>
-          )}
-          
-          <div className="turma-pill">
-            <Filter size={14} />
-            <select value={selectedTurmaId} onChange={e => setSelectedTurmaId(e.target.value)}>
-              {turmas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </select>
-          </div>
-
-          <button className="nav-btn silver" onClick={handleExport} disabled={isExporting}>
-            {isExporting ? <Loader2 className="spin" size={16} /> : <Download size={16} />} Exportar
-          </button>
+           {itens.length === 0 && <button className="nav-btn primary" onClick={handleImport} disabled={isImporting}><DatabaseZap size={16}/> Importar Modelo</button>}
+           <div className="turma-pill"><Filter size={14}/>
+              <select value={selectedTurmaId} onChange={e => setSelectedTurmaId(e.target.value)}>
+                {initialTurmas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+              </select>
+           </div>
+           <button className="nav-btn silver" onClick={() => {
+              const csv = itens.map(i => `${i.item_n};${i.titulo};${turmaRespostasMap[i.id]?.status || 'PENDENTE'}`).join('\n')
+              const link = document.createElement('a'); link.href = encodeURI("data:text/csv;charset=utf-8,\uFEFF" + csv); link.download = 'checklist.csv'; link.click()
+           }}><Download size={16}/> Exportar</button>
         </div>
       </div>
 
-      {/* SPREADSHEET TABLE */}
+      {/* TABLE */}
       <div className="table-viewport glass">
         <table className="modern-table">
           <thead>
             <tr>
-              <th className="sticky-h col-actions">#</th>
-              <th className="sticky-h col-prazo">PRAZO</th>
-              <th className="sticky-h col-resp">QUEM</th>
-              <th className="sticky-h col-etapa">O QUE FAZER</th>
-              <th className="sticky-h col-desc">DETALHAMENTO</th>
-              <th className="sticky-h col-data">REALIZAÇÃO</th>
-              <th className="sticky-h col-status">STATUS</th>
+              <th className="sticky-h">#</th>
+              <th className="sticky-h">PRAZO</th>
+              <th className="sticky-h">QUEM</th>
+              <th className="sticky-h">ETAPA</th>
+              <th className="sticky-h">DETALHAMENTO</th>
+              <th className="sticky-h">DATA</th>
+              <th className="sticky-h">STATUS</th>
             </tr>
           </thead>
           <tbody>
             {itens.map((item) => {
               const resp = turmaRespostasMap[item.id]
               const status = resp?.status || 'PENDENTE'
-              const isSaving = saving?.includes(item.id)
-
+              const isSaving = saving === `cell-${item.id}`
+              
               return (
                 <tr key={item.id} className="row-premium">
                   <td className="cell center-text">
                     <div className="n-cell">
                       <span className="n-badge">{item.item_n}</span>
-                      {isAdmin && (
-                        <button className="delete-row-btn" onClick={() => handleDeleteItem(item.id)}>
-                          <Trash size={12} />
-                        </button>
-                      )}
+                      {isAdmin && <button className="delete-row-btn" onClick={() => handleDeleteItem(item.id)}><Trash size={12}/></button>}
                     </div>
                   </td>
-                  <td className="cell prazo-cell">{item.contexto}</td>
-                  <td className="cell resp-cell">{item.responsavel}</td>
-                  <td className="cell titulo-cell">
-                    <div className="inline-edit-wrapper">
-                      {item.titulo}
-                      {isAdmin && <button className="mini-edit" onClick={() => setEditingItem(item)}><Edit3 size={10} /></button>}
-                    </div>
+                  <td className="cell">{item.contexto}</td>
+                  <td className="cell resp-text">{item.responsavel}</td>
+                  <td className="cell font-bold">
+                    <div className="inline-edit">{item.titulo}{isAdmin && <button className="mini-edit" onClick={() => setEditingItem(item)}><Edit3 size={10}/></button>}</div>
                   </td>
-                  <td className="cell desc-cell">{linkify(item.descricao || '')}</td>
+                  <td className="cell desc-text">{item.descricao}</td>
                   <td className="cell">
-                    <input 
-                      type="date" 
-                      className="glass-date-input" 
-                      value={resp?.valor_data || ''} 
-                      onChange={e => saveValue(item.id, { valor_data: e.target.value })} 
-                    />
+                    <input type="date" className="date-input" value={resp?.valor_data || ''} onChange={e => saveValue(item.id, { valor_data: e.target.value })} />
                   </td>
                   <td className="cell">
-                    <div className="status-select-wrap">
+                    <div className="status-wrap">
                       <select 
-                        className={`modern-select ${status.toLowerCase()}`}
-                        value={status} 
-                        onChange={e => saveValue(item.id, { status: e.target.value as any })}
+                        className={`status-select ${status.toLowerCase()}`}
+                        value={status}
+                        onChange={(e) => saveValue(item.id, { status: e.target.value as any })}
                       >
-                        <option value="PENDENTE">🚨 PENDENTE</option>
+                        <option value="PENDENTE">🔴 PENDENTE</option>
                         <option value="OK">✅ CONCLUÍDO</option>
                         <option value="N/A">⚪ N/A</option>
                       </select>
-                      {isSaving && <div className="saving-indicator"><Loader2 size={10} className="spin" /></div>}
+                      {isSaving && <Loader2 size={10} className="spin loading-icon" />}
                     </div>
                   </td>
                 </tr>
@@ -308,135 +240,82 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
             })}
           </tbody>
         </table>
-        
-        {isAdmin && (
-          <div className="footer-actions">
-            <button className="add-row-btn" onClick={handleAddItem} disabled={isAddingItem}>
-              {isAddingItem ? <Loader2 className="spin" size={16} /> : <Plus size={16} />} Adicionar Nova Etapa
-            </button>
-          </div>
-        )}
+        {isAdmin && <div className="footer-actions"><button className="add-row-btn" onClick={handleAddItem}><Plus size={16}/> Adicionar Nova Etapa</button></div>}
       </div>
 
-      {/* EDIT MODAL (ADMIN ONLY) */}
       {editingItem && (
         <div className="overlay" onClick={() => setEditingItem(null)}>
           <div className="modal glass" onClick={e => e.stopPropagation()}>
-             <div className="modal-header">
-                <h3>Editar Processo #{editingItem.item_n}</h3>
-                <button className="close-btn" onClick={() => setEditingItem(null)}><X /></button>
-             </div>
-             <div className="modal-body">
-                <div className="input-group">
-                  <label>Título da Etapa</label>
-                  <input value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value})} />
-                </div>
-                <div className="input-row">
-                  <div className="input-group">
-                    <label>Prazo</label>
-                    <input value={editingItem.contexto || ''} onChange={e => setEditingItem({...editingItem, contexto: e.target.value})} />
-                  </div>
-                  <div className="input-group">
-                    <label>Responsável</label>
-                    <input value={editingItem.responsavel || ''} onChange={e => setEditingItem({...editingItem, responsavel: e.target.value})} />
-                  </div>
-                </div>
-                <div className="input-group">
-                  <label>Descrição Completa</label>
-                  <textarea rows={6} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} />
-                </div>
-             </div>
-             <div className="modal-footer">
-                <button className="nav-btn silver" onClick={() => setEditingItem(null)}>Cancelar</button>
-                <button className="nav-btn primary" onClick={async () => {
-                  const { error } = await supabase.from('checklist_itens').update({
-                    titulo: editingItem.titulo, contexto: editingItem.contexto, responsavel: editingItem.responsavel, descricao: editingItem.descricao
-                  }).eq('id', editingItem.id)
-                  if (!error) {
-                    setItens(prev => prev.map(i => i.id === editingItem.id ? editingItem : i))
-                    setEditingItem(null)
-                  }
-                }}>Salvar</button>
-             </div>
+            <div className="modal-header"><h3>Editar Item #{editingItem.item_n}</h3><button className="close-btn" onClick={() => setEditingItem(null)}><X/></button></div>
+            <div className="modal-body">
+              <input value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value})} className="modal-input" placeholder="Título" />
+              <textarea rows={5} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} className="modal-input" placeholder="Descrição" />
+            </div>
+            <div className="modal-footer">
+               <button className="nav-btn silver" onClick={() => setEditingItem(null)}>Cancelar</button>
+               <button className="nav-btn primary" onClick={async () => {
+                  const { error } = await supabase.from('checklist_itens').update(editingItem).eq('id', editingItem.id)
+                  if (!error) { setItens(prev => prev.map(i => i.id === editingItem.id ? editingItem : i)); setEditingItem(null) }
+               }}>Salvar</button>
+            </div>
           </div>
         </div>
       )}
 
       <style jsx>{`
-        .checklist-v2-container { display: flex; flex-direction: column; gap: 20px; animation: fadeIn 0.4s ease; color: #fff; padding-bottom: 50px; }
-        
-        .checklist-v2-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.08); background: rgba(15, 15, 25, 0.8); }
-        .header-left { display: flex; align-items: center; gap: 16px; flex: 1; }
-        .brand-badge { width: 44px; height: 44px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(79, 124, 255, 0.3); }
-        
-        .title-stack { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-        .main-title-input { background: transparent; border: none; border-bottom: 2px solid transparent; font-size: 24px; font-weight: 800; color: #fff; outline: none; transition: 0.3s; width: 90%; }
+        .checklist-v2-container { display: flex; flex-direction: column; gap: 20px; color: #fff; padding-bottom: 50px; }
+        .glass { background: rgba(15, 15, 25, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; }
+        .checklist-v2-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .brand-badge { width: 44px; height: 44px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+        .main-title-input { background: transparent; border: none; font-size: 24px; font-weight: 800; color: #fff; outline: none; width: 400px; border-bottom: 1px solid transparent; }
         .main-title-input:focus { border-color: #4f7cff; }
-        .subtitle { font-size: 11px; color: #6e6e80; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-
+        .subtitle { font-size: 11px; color: #6e6e80; text-transform: uppercase; display: block; }
+        
         .header-actions { display: flex; gap: 12px; align-items: center; }
-        .turma-pill { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.05); padding: 0 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); height: 42px; }
-        .turma-pill select { background: transparent; border: none; color: #fff; font-size: 14px; font-weight: 700; outline: none; cursor: pointer; }
+        .nav-btn { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s; border: 1px solid rgba(255,255,255,0.1); }
+        .nav-btn.primary { background: #4f7cff; color: #fff; }
+        .nav-btn.silver { background: rgba(255,255,255,0.05); color: #fff; }
+        .turma-pill { background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 10px; display: flex; align-items: center; gap: 8px; }
+        .turma-pill select { background: transparent; border: none; color: #fff; font-weight: 700; outline: none; }
 
-        .nav-btn { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s; }
-        .nav-btn.primary { background: #4f7cff; color: #fff; box-shadow: 0 4px 15px rgba(79,124,255,0.2); }
-        .nav-btn.silver { background: rgba(255,255,255,0.06); color: #e0e0e6; }
-        .nav-btn:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.15); }
-
-        .table-viewport { border-radius: 18px; border: 1px solid rgba(255,255,255,0.08); overflow: auto; background: rgba(10, 10, 20, 0.6); max-height: 75vh; }
-        .modern-table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1200px; }
-        
-        .sticky-h { position: sticky; top: 0; z-index: 10; background: #12121e; padding: 16px; font-size: 11px; font-weight: 800; color: #6e6e80; text-transform: uppercase; text-align: left; border-bottom: 2px solid #252535; }
-        
-        .row-premium:hover { background: rgba(255,255,255,0.03); }
-        .cell { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 13px; vertical-align: top; }
+        .table-viewport { overflow: auto; max-height: 75vh; }
+        .modern-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        .sticky-h { position: sticky; top: 0; background: #12121e; padding: 16px; font-size: 11px; color: #6e6e80; text-transform: uppercase; z-index: 10; text-align: left; border-bottom: 1px solid #303040; }
+        .row-premium:hover { background: rgba(255,255,255,0.02); }
+        .cell { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; vertical-align: top; }
         
         .n-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-        .n-badge { background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 6px; font-weight: 800; color: #9494a3; font-size: 11px; }
+        .n-badge { background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 6px; font-weight: 800; font-size: 11px; }
         .delete-row-btn { background: none; border: none; color: #ff4d6a; opacity: 0; cursor: pointer; transition: 0.2s; }
         .row-premium:hover .delete-row-btn { opacity: 0.5; }
         .delete-row-btn:hover { opacity: 1 !important; transform: scale(1.2); }
 
-        .prazo-cell { font-weight: 700; color: #e0e0e6; }
-        .resp-cell { color: #4f7cff; font-weight: 700; }
-        .titulo-cell { color: #fff; font-weight: 700; }
-        .inline-edit-wrapper { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
-        .mini-edit { background: none; border: none; color: #4f7cff; opacity: 0; cursor: pointer; transition: 0.2s; }
-        .row-premium:hover .mini-edit { opacity: 0.6; }
+        .resp-text { color: #4f7cff; font-weight: 700; }
+        .desc-text { color: #9494a3; font-size: 12px; line-height: 1.5; white-space: pre-wrap; max-width: 400px; }
+        
+        .date-input { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; padding: 8px; width: 100%; outline: none; cursor: pointer; }
+        
+        .status-select { width: 100%; padding: 10px; border-radius: 10px; font-weight: 800; font-size: 12px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); outline: none; transition: 0.2s; }
+        .status-select.ok { background: rgba(16, 217, 140, 0.2); color: #10d98c; border-color: rgba(16, 217, 140, 0.4); }
+        .status-select.pendente { background: rgba(255, 77, 106, 0.2); color: #ff4d6a; border-color: rgba(255, 77, 106, 0.4); }
+        .status-select.n/a { background: rgba(255,255,255,0.05); color: #9494a3; }
+        
+        .status-wrap { position: relative; }
+        .loading-icon { position: absolute; top: -5px; right: -5px; color: #4f7cff; }
 
-        .desc-cell { color: #9494a3; line-height: 1.6; font-size: 12px; white-space: pre-wrap; font-family: inherit; }
-        .link-text { color: #4f7cff; font-weight: 700; text-decoration: underline; }
+        .footer-actions { padding: 20px; display: flex; justify-content: center; }
+        .add-row-btn { display: flex; align-items: center; gap: 8px; padding: 12px 24px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2); color: #9494a3; cursor: pointer; transition: 0.2s; }
+        .add-row-btn:hover { border-color: #4f7cff; color: #fff; background: rgba(79, 124, 255, 0.05); }
 
-        .glass-date-input { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px; color: #fff; width: 100%; font-size: 12px; outline: none; cursor: pointer; transition: 0.2s; }
-        .glass-date-input:focus { border-color: #4f7cff; background: rgba(79,124,255,0.05); }
-
-        .status-select-wrap { position: relative; width: 100%; }
-        .modern-select { width: 100%; border-radius: 10px; padding: 10px; font-size: 12px; font-weight: 800; cursor: pointer; transition: 0.2s; border: 1px solid rgba(255,255,255,0.1); outline: none; }
-        .modern-select.ok { background: rgba(16, 217, 140, 0.15); color: #10d98c; border-color: rgba(16, 217, 140, 0.3); }
-        .modern-select.pendente { background: rgba(255, 77, 106, 0.15); color: #ff4d6a; border-color: rgba(255, 77, 106, 0.3); }
-        .modern-select.n/a { background: rgba(255,255,255,0.05); color: #9494a3; }
-        .saving-indicator { position: absolute; top: -6px; right: -6px; background: #4f7cff; border-radius: 50%; padding: 3px; }
-
-        .footer-actions { padding: 24px; display: flex; justify-content: center; background: rgba(255,255,255,0.02); }
-        .add-row-btn { display: flex; align-items: center; gap: 10px; padding: 12px 24px; border-radius: 14px; background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2); color: #9494a3; font-weight: 700; cursor: pointer; transition: 0.2s; }
-        .add-row-btn:hover { background: rgba(79,124,255,0.05); border-style: solid; border-color: #4f7cff; color: #fff; transform: scale(1.02); }
-
-        /* MODAL & OVERLAY */
-        .overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fadeInModal 0.3s ease; }
-        .modal { width: 100%; max-width: 650px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; background: #0f0f1a; }
-        .modal-header { padding: 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .modal-header h3 { margin: 0; font-size: 20px; font-weight: 800; }
+        .overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal { width: 500px; padding: 0; overflow: hidden; }
         .modal-body { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
-        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .input-group { display: flex; flex-direction: column; gap: 8px; }
-        .input-group label { font-size: 11px; font-weight: 800; color: #6e6e80; text-transform: uppercase; }
-        .input-group input, .input-group textarea { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; color: #fff; outline: none; }
-        .modal-footer { padding: 20px 24px; display: flex; justify-content: flex-end; gap: 12px; background: rgba(255,255,255,0.02); }
+        .modal-input { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; color: #fff; width: 100%; outline: none; }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeInModal { from { opacity: 0; } to { opacity: 1; } }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; } }
       `}</style>
     </div>
   )
