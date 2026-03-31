@@ -22,7 +22,7 @@ interface Props {
 export default function ChecklistClient({ itens: initialItens, turmas: initialTurmas, respostas: initialRespostas, perfil, usuarioId }: Props) {
   const [itens, setItens] = useState(initialItens)
   const [respostas, setRespostas] = useState(initialRespostas)
-  // Define a turma padrão (primeira da lista)
+  // BUGFIX: Garante que seleciona a primeira turma se houver, para evitar erro de salvamento
   const [selectedTurmaId, setSelectedTurmaId] = useState<string>(initialTurmas[0]?.id || '')
   
   const [customTitle, setCustomTitle] = useState('')
@@ -33,12 +33,14 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
   const isAdmin = perfil === 'admin' || perfil === 'master'
   const supabase = createClient()
 
+  // Sincroniza o título quando a turma muda
   useEffect(() => {
     const turma = initialTurmas.find(t => t.id === selectedTurmaId)
-    if (turma && !customTitle) setCustomTitle(`Acompanhamento Imersão - ${turma.nome}`)
-  }, [selectedTurmaId, initialTurmas, customTitle])
+    if (turma) {
+      setCustomTitle(`Acompanhamento Imersão - ${turma.nome}`)
+    }
+  }, [selectedTurmaId, initialTurmas])
 
-  // Map de respostas para acesso rápido
   const turmaRespostasMap = useMemo(() => {
     const map: Record<string, ChecklistResposta> = {}
     respostas.filter(r => r.turma_id === selectedTurmaId).forEach(r => {
@@ -53,7 +55,7 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
     if (existing) {
       setRespostas(prev => prev.map(r => r.id === existing.id ? { ...r, [field]: value } : r))
     } else {
-      const tempId = `temp-${itemId}`
+      const tempId = `temp-${itemId}-${selectedTurmaId}`
       const newResp: any = {
         id: tempId,
         item_id: itemId,
@@ -69,17 +71,14 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
   }
 
   // --- SALVAMENTO NO BANCO (UPSERT) ---
-  // Função que realmente envia para o Supabase
   const performSave = async (itemId: string, updates: Partial<ChecklistResposta>) => {
     if (!selectedTurmaId) {
-        alert("Erro: Nenhuma turma selecionada para salvar.");
+        alert("Atenção: Selecione uma turma no seletor para poder salvar.");
         return;
     }
     
     setSaving(`cell-${itemId}`)
-    console.log("Tentando salvar:", { itemId, updates, selectedTurmaId });
 
-    // Tenta salvar usando UPSERT (Insere se não existe, atualiza se existe)
     const { data, error } = await supabase
         .from('checklist_respostas')
         .upsert({
@@ -88,16 +87,14 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
             ...updates,
             respondido_por: usuarioId,
             updated_at: new Date().toISOString()
-        }, { onConflict: 'item_id,turma_id' }) // Isso exige a constraint UNIQUE no banco
+        }, { onConflict: 'item_id,turma_id' })
         .select()
         .single()
 
     if (error) {
-        console.error("ERRO CRÍTICO AO SALVAR NO SUPABASE:", error)
-        alert(`NÃO SALVOU NO BANCO:\n${error.message}\n\nCertifique-se de que rodou o SQL da CONSTRAINT UNIQUE.`)
+        console.error("ERRO SUPABASE:", error)
+        alert(`Erro Crítico: ${error.message}`)
     } else if (data) {
-        console.log("Salvo com sucesso:", data)
-        // Atualiza a lista oficial com o objeto que veio do banco (com ID real)
         setRespostas(prev => prev.map(r => (r.item_id === itemId && r.turma_id === selectedTurmaId) ? data : r))
     }
 
@@ -105,7 +102,7 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
   }
 
   const handleDeleteItem = async (id: string) => {
-    if (!isAdmin || !confirm('Excluir esta linha?')) return
+    if (!isAdmin || !confirm('Excluir esta linha permanentemente?')) return
     const { error } = await supabase.from('checklist_itens').delete().eq('id', id)
     if (!error) setItens(prev => prev.filter(i => i.id !== id))
   }
@@ -120,38 +117,57 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
   }
 
   return (
-    <div className="checklist-v5-container">
-      {/* CABEÇALHO */}
-      <div className="header-v5 glass">
-        <div className="header-v5-left">
+    <div className="checklist-vfinal-container">
+      {/* HEADER PREMIUM REFORMULADO */}
+      <div className="header-vfinal glass">
+        <div className="header-vfinal-left">
            <div className="brand-badge"><DatabaseZap size={22} /></div>
            <div className="title-area">
-             <input className="title-input" value={customTitle} onChange={e => setCustomTitle(e.target.value)} />
-             <span>Gestão de Acompanhamento Profissional - Lito Academy</span>
+             {/* TÍTULO EDITÁVEL DO RELATÓRIO */}
+             <input 
+               className="title-input-edit" 
+               value={customTitle} 
+               onChange={e => setCustomTitle(e.target.value)} 
+               title="Clique para editar o título do relatório"
+             />
+             <span>Gestão de Processos - Lito Academy</span>
            </div>
         </div>
-        <div className="header-v5-right">
-           <button className="btn-v5 primary" onClick={() => {
+
+        <div className="header-vfinal-right">
+           {/* SELETOR DE TURMA (RESTAURADO PARA FUNCIONAMENTO DO BANCO) */}
+           <div className="turma-selector-mini">
+              <Filter size={14} color="#6e6e80" />
+              <select value={selectedTurmaId} onChange={e => setSelectedTurmaId(e.target.value)}>
+                {initialTurmas.length > 0 ? (
+                  initialTurmas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)
+                ) : (
+                  <option value="">Nenhuma Turma Encontrada</option>
+                )}
+              </select>
+           </div>
+
+           <button className="btn-vfinal primary" onClick={() => {
               const headers = ['ITEM', 'PRAZO', 'RESPONSÁVEL', 'ETAPA', 'DESCRIÇÃO', 'DATA', 'STATUS']
               const csvData = [headers, ...itens.map(i => [i.item_n, i.contexto, i.responsavel, i.titulo, i.descricao, turmaRespostasMap[i.id]?.valor_data || '-', turmaRespostasMap[i.id]?.valor_texto || ''])]
               const content = csvData.map(r => r.join(';')).join('\n')
               const link = document.createElement('a'); link.href = encodeURI("data:text/csv;charset=utf-8,\uFEFF" + content); link.download = `${customTitle}.csv`; link.click()
-           }}><Download size={16}/> Exportar tudo</button>
+           }}><Download size={16}/> Baixar Relatório</button>
         </div>
       </div>
 
       {/* TABELA PLANILHA */}
-      <div className="table-viewport-v5 glass">
-        <table className="table-v5">
+      <div className="table-viewport-vfinal glass">
+        <table className="table-vfinal">
           <thead>
             <tr>
-              <th className="th-v5 center">#</th>
-              <th className="th-v5">PRAZO</th>
-              <th className="th-v5">RESPONSÁVEL</th>
-              <th className="th-v5">ETAPA / ITEM DO PROCESSO</th>
-              <th className="th-v5">DETALHAMENTO</th>
-              <th className="th-v5">DATA</th>
-              <th className="th-v5">STATUS / SITUAÇÃO (DIGITE AQUI)</th>
+              <th className="th-vfinal center">#</th>
+              <th className="th-vfinal">PRAZO</th>
+              <th className="th-vfinal">RESPONSÁVEL</th>
+              <th className="th-vfinal">ETAPA / ITEM DO PROCESSO</th>
+              <th className="th-vfinal">DETALHAMENTO</th>
+              <th className="th-vfinal">DATA REALIZAÇÃO</th>
+              <th className="th-vfinal">STATUS / SITUAÇÃO (DIGITE AQUI)</th>
             </tr>
           </thead>
           <tbody>
@@ -160,43 +176,44 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
               const isSaving = saving === `cell-${item.id}`
               
               return (
-                <tr key={item.id} className="tr-v5">
-                  <td className="td-v5 center">
+                <tr key={item.id} className="tr-vfinal">
+                  <td className="td-vfinal center">
                     <div className="n-wrap">
-                      <span className="n-text">{item.item_n}</span>
-                      {isAdmin && <button className="del-btn" onClick={() => handleDeleteItem(item.id)}><Trash size={12}/></button>}
+                      <span className="n-badge">{item.item_n}</span>
+                      {isAdmin && <button className="del-btn-vfinal" onClick={() => handleDeleteItem(item.id)}><Trash size={12}/></button>}
                     </div>
                   </td>
-                  <td className="td-v5 prazo-text">{item.contexto}</td>
-                  <td className="td-v5 blue-text">{item.responsavel}</td>
-                  <td className="td-v5 font-bold">
-                    <div className="edit-wrap">
+                  <td className="td-vfinal prazo-txt">{item.contexto}</td>
+                  <td className="td-vfinal blue-txt">{item.responsavel}</td>
+                  <td className="td-vfinal font-bold">
+                    <div className="edit-wrap-vfinal">
+                       {/* NOME DA ETAPA (EDITÁVEL PELO ADMIN) */}
                        {item.titulo}
-                       {isAdmin && <button className="edit-btn" onClick={() => setEditingItem(item)}><Edit size={10}/></button>}
+                       {isAdmin && <button className="mini-edit-btn" onClick={() => setEditingItem(item)}><Edit3 size={11}/></button>}
                     </div>
                   </td>
-                  <td className="td-v5 desc-text">{item.descricao}</td>
-                  <td className="td-v5">
+                  <td className="td-vfinal desc-txt">{item.descricao}</td>
+                  <td className="td-vfinal">
                     <input 
                       type="date" 
-                      className="input-v5" 
+                      className="input-vfinal" 
                       value={resp?.valor_data || ''} 
                       onChange={e => handleLocalChange(item.id, 'valor_data', e.target.value)}
                       onBlur={e => performSave(item.id, { valor_data: (e.target as HTMLInputElement).value })} 
                     />
                   </td>
-                  <td className="td-v5">
-                    <div className="status-container-v5">
+                  <td className="td-vfinal">
+                    <div className="status-container-vfinal">
                       <input 
                         type="text" 
-                        className="input-v5 status-input" 
+                        className="input-vfinal status-txt-input" 
                         placeholder="Escreva algo..."
                         value={resp?.valor_texto || ''}
                         onChange={e => handleLocalChange(item.id, 'valor_texto', e.target.value)}
                         onBlur={e => performSave(item.id, { valor_texto: (e.target as HTMLInputElement).value })}
                         onKeyDown={e => e.key === 'Enter' && performSave(item.id, { valor_texto: (e.target as HTMLInputElement).value })}
                       />
-                      {isSaving && <div className="loader-v5"><Loader2 size={12} className="spin" /></div>}
+                      {isSaving && <div className="loader-vfinal"><Loader2 size={12} className="spin" /></div>}
                     </div>
                   </td>
                 </tr>
@@ -206,89 +223,105 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         </table>
         
         {isAdmin && (
-          <div className="footer-v5">
-            <button className="add-btn-v5" onClick={handleAddItem}><Plus size={16}/> Adicionar Nova Linha</button>
+          <div className="footer-vfinal">
+            <button className="add-btn-vfinal" onClick={handleAddItem}><Plus size={16}/> Adicionar Nova Etapa ao Modelo</button>
           </div>
         )}
       </div>
 
       {editingItem && (
-        <div className="overlay-v5" onClick={() => setEditingItem(null)}>
-           <div className="modal-v5 glass" onClick={e => e.stopPropagation()}>
-              <div className="modal-header-v5"><h3>Editar Etapa #{editingItem.item_n}</h3><button onClick={() => setEditingItem(null)}><X/></button></div>
-              <div className="modal-body-v5">
-                 <div className="modal-group">
-                   <label>Título</label>
-                   <input className="input-v5" value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value})} />
+        <div className="overlay-vfinal" onClick={() => setEditingItem(null)}>
+           <div className="modal-vfinal glass" onClick={e => e.stopPropagation()}>
+              <div className="modal-header-vfinal"><h3>Editar Etapa #{editingItem.item_n}</h3><button onClick={() => setEditingItem(null)}><X/></button></div>
+              <div className="modal-body-vfinal">
+                 <div className="input-group-vfinal">
+                    <label>Nome do Processo</label>
+                    <input className="input-vfinal" value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value})} />
                  </div>
-                 <div className="modal-group">
-                   <label>Descrição</label>
-                   <textarea className="input-v5" rows={5} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} />
+                 <div className="input-group-vfinal">
+                    <label>Responsável Padrão</label>
+                    <input className="input-vfinal" value={editingItem.responsavel || ''} onChange={e => setEditingItem({...editingItem, responsavel: e.target.value})} />
+                 </div>
+                 <div className="input-group-vfinal">
+                    <label>Descrição Detalhada</label>
+                    <textarea className="input-vfinal" rows={6} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} />
                  </div>
               </div>
-              <div className="modal-footer-v5">
-                 <button className="btn-v5 silver" onClick={() => setEditingItem(null)}>Cancelar</button>
-                 <button className="btn-v5 primary" onClick={async () => {
+              <div className="modal-footer-vfinal">
+                 <button className="btn-vfinal silver" onClick={() => setEditingItem(null)}>Cancelar</button>
+                 <button className="btn-vfinal primary" onClick={async () => {
                     await supabase.from('checklist_itens').update(editingItem).eq('id', editingItem.id)
                     setItens(prev => prev.map(i => i.id === editingItem.id ? editingItem : i))
                     setEditingItem(null)
-                 }}>Salvar</button>
+                 }}>Salvar Alterações</button>
               </div>
            </div>
         </div>
       )}
 
       <style jsx>{`
-        .checklist-v5-container { display: flex; flex-direction: column; gap: 20px; animation: fadeIn 0.4s ease; padding-bottom: 50px; }
-        .glass { background: rgba(10, 10, 18, 0.9); backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; }
+        .checklist-vfinal-container { display: flex; flex-direction: column; gap: 20px; animation: fadeIn 0.4s ease; padding-bottom: 50px; }
+        .glass { background: rgba(10, 10, 20, 0.95); backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
         
-        .header-v5 { display: flex; justify-content: space-between; align-items: center; padding: 24px; }
-        .header-v5-left { display: flex; align-items: center; gap: 16px; flex: 1; }
-        .brand-badge { width: 50px; height: 50px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 30px rgba(79,124,255,0.4); }
-        .title-area { flex: 1; }
-        .title-input { background: transparent; border: none; font-size: 26px; font-weight: 900; color: #fff; outline: none; width: 100%; border-bottom: 2px solid transparent; transition: 0.3s; }
-        .title-input:focus { border-color: #4f7cff; }
-        .title-area span { font-size: 11px; color: #6e6e80; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; }
+        .header-vfinal { display: flex; justify-content: space-between; align-items: center; padding: 24px; }
+        .header-vfinal-left { display: flex; align-items: center; gap: 16px; flex: 1; }
+        .brand-badge { width: 50px; height: 50px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 14px; display: flex; align-items: center; justify-content: center; }
+        
+        .title-area { flex: 1; display: flex; flex-direction: column; }
+        .title-input-edit { background: transparent; border: none; font-size: 28px; font-weight: 900; color: #fff; outline: none; border-bottom: 2px solid transparent; width: 90%; transition: 0.3s; }
+        .title-input-edit:focus { border-color: #4f7cff; }
+        .title-area span { font-size: 11px; color: #6e6e80; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-top: 4px; }
 
-        .btn-v5 { display: flex; align-items: center; gap: 10px; padding: 12px 24px; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: 0.2s; }
-        .btn-v5.primary { background: #4f7cff; color: #fff; }
-        .btn-v5.silver { background: rgba(255,255,255,0.05); color: #fff; }
+        .header-vfinal-right { display: flex; gap: 12px; align-items: center; }
+        .turma-selector-mini { background: rgba(255,255,255,0.06); padding: 0 12px; border-radius: 12px; height: 46px; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 8px; }
+        .turma-selector-mini select { background: transparent; border: none; color: #fff; font-weight: 700; font-size: 14px; outline: none; cursor: pointer; }
 
-        .table-viewport-v5 { overflow: auto; max-height: 80vh; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05); }
-        .table-v5 { width: 100%; border-collapse: collapse; min-width: 1300px; }
-        .th-v5 { position: sticky; top: 0; background: #0f0f1a; padding: 20px 16px; font-size: 11px; color: #6e6e80; font-weight: 900; text-transform: uppercase; text-align: left; z-index: 10; border-bottom: 2px solid #252540; }
-        .tr-v5:hover { background: rgba(255,255,255,0.02); }
-        .td-v5 { padding: 18px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 14px; vertical-align: top; color: #e0e0e6; }
-        
-        .prazo-text { font-weight: 700; color: #fff; }
-        .blue-text { color: #4f7cff; font-weight: 800; }
-        .desc-text { color: #8a8a9c; font-size: 12px; line-height: 1.7; max-width: 500px; white-space: pre-wrap; }
-        
-        .n-badge { background: rgba(255,255,255,0.05); padding: 5px 10px; border-radius: 8px; font-weight: 900; font-size: 12px; }
-        .del-btn { background: none; border: none; color: #ff4d6a; opacity: 0; cursor: pointer; transition: 0.2s; }
-        .tr-v5:hover .del-btn { opacity: 0.5; }
-        
-        .input-v5 { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px; color: #fff; width: 100%; outline: none; font-size: 14px; transition: 0.2s; }
-        .input-v5:focus { border-color: #4f7cff; background: rgba(79,124,255,0.08); }
-        .status-input { font-weight: 800; color: #10d98c; border: 1px solid rgba(16, 217, 140, 0.2); }
-        
-        .status-container-v5 { position: relative; }
-        .loader-v5 { position: absolute; top: -8px; right: -8px; background: #4f7cff; border-radius: 50%; padding: 4px; }
+        .btn-vfinal { display: flex; align-items: center; gap: 10px; padding: 12px 24px; border-radius: 14px; font-size: 15px; font-weight: 800; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: 0.2s; }
+        .btn-vfinal.primary { background: #4f7cff; color: #fff; }
+        .btn-vfinal.silver { background: rgba(255,255,255,0.05); color: #fff; }
+        .btn-vfinal:hover { transform: translateY(-3px); filter: brightness(1.2); }
 
-        .footer-v5 { padding: 30px; display: flex; justify-content: center; }
-        .add-btn-v5 { display: flex; align-items: center; gap: 8px; padding: 15px 30px; border-radius: 14px; background: rgba(255,255,255,0.03); border: 1.5px dashed rgba(255,255,255,0.15); color: #9494a3; font-weight: 800; cursor: pointer; transition: 0.2s; }
-        .add-btn-v5:hover { border-color: #4f7cff; color: #fff; background: rgba(79,124,255,0.05); }
+        .table-viewport-vfinal { overflow: auto; max-height: 80vh; background: rgba(0,0,0,0.3); }
+        .table-vfinal { width: 100%; border-collapse: collapse; min-width: 1400px; }
+        .th-vfinal { position: sticky; top: 0; background: #0a0a14; padding: 20px 16px; font-size: 12px; color: #6e6e80; font-weight: 900; text-transform: uppercase; text-align: left; z-index: 10; border-bottom: 2px solid #252540; }
+        .tr-vfinal:hover { background: rgba(255,255,255,0.03); }
+        .td-vfinal { padding: 18px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; vertical-align: top; color: #e0e0e6; }
+        
+        .prazo-txt { font-weight: 700; color: #fff; }
+        .blue-txt { color: #4f7cff; font-weight: 800; }
+        .desc-txt { color: #8a8a9c; font-size: 12px; line-height: 1.7; max-width: 500px; white-space: pre-wrap; }
+        
+        .n-badge { background: rgba(255,255,255,0.05); padding: 5px 10px; border-radius: 8px; font-weight: 900; font-size: 12px; color: #4f7cff; }
+        .del-btn-vfinal { background: none; border: none; color: #ff4d6a; opacity: 0; cursor: pointer; transition: 0.2s; }
+        .tr-vfinal:hover .del-btn-vfinal { opacity: 0.5; }
+        
+        .edit-wrap-vfinal { display: flex; justify-content: space-between; align-items: start; gap: 10px; }
+        .mini-edit-btn { background: none; border: none; color: #4f7cff; opacity: 0; cursor: pointer; transition: 0.3s; }
+        .tr-vfinal:hover .mini-edit-btn { opacity: 0.8; }
+
+        .input-vfinal { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; color: #fff; width: 100%; outline: none; font-size: 14px; transition: 0.2s; }
+        .input-vfinal:focus { border-color: #4f7cff; background: rgba(79,124,255,0.08); }
+        .status-txt-input { font-weight: 800; color: #10d98c; border-color: rgba(16, 217, 140, 0.2); }
+        
+        .status-container-vfinal { position: relative; }
+        .loader-vfinal { position: absolute; top: -8px; right: -8px; background: #4f7cff; border-radius: 50%; padding: 4px; }
+
+        .footer-vfinal { padding: 30px; display: flex; justify-content: center; }
+        .add-btn-vfinal { display: flex; align-items: center; gap: 10px; padding: 15px 30px; border-radius: 16px; background: rgba(255,255,255,0.04); border: 2px dashed rgba(255,255,255,0.2); color: #9494a3; font-weight: 800; cursor: pointer; transition: 0.3s; }
+        .add-btn-vfinal:hover { border-color: #4f7cff; color: #fff; background: rgba(79,124,255,0.1); }
 
         /* MODAL */
-        .overlay-v5 { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-        .modal-v5 { width: 600px; padding: 0; overflow: hidden; }
-        .modal-header-v5 { padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; }
-        .modal-body-v5 { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
-        .modal-footer-v5 { padding: 20px 24px; display: flex; justify-content: flex-end; gap: 12px; }
+        .overlay-vfinal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-vfinal { width: 650px; overflow: hidden; }
+        .modal-header-vfinal { padding: 30px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; }
+        .modal-body-vfinal { padding: 30px; display: flex; flex-direction: column; gap: 20px; }
+        .input-group-vfinal { display: flex; flex-direction: column; gap: 8px; }
+        .input-group-vfinal label { font-size: 11px; font-weight: 800; color: #6e6e80; text-transform: uppercase; }
+        .modal-footer-vfinal { padding: 25px 30px; display: flex; justify-content: flex-end; gap: 15px; background: rgba(255,255,255,0.02); }
 
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; } }
       `}</style>
     </div>
   )
