@@ -65,7 +65,7 @@ export default function Sidebar({ user }: SidebarProps) {
   }
 
   const adminLinks = [
-    { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { href: '/dashboard', icon: LayoutDashboard, label: '📊 DASHBOARD' },
     { href: '/dashboard/tarefas', icon: CheckSquare, label: 'Tarefas' },
     { href: '/dashboard/checklist', icon: ClipboardCheck, label: 'Checklist Imersão' },
     { href: '/dashboard/usuarios', icon: Users, label: 'Usuários' },

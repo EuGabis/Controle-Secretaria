@@ -1,6 +1,6 @@
 'use client'
 
-// v8.1 - Checklist Inteligente (Shift/Links)
+// v8.2 - Checklist Inteligente (Shift/Links) - Deploy Forçado 📊
 
 import { useState, useMemo, useEffect } from 'react'
 import { ChecklistItem, ChecklistTurma, ChecklistResposta } from '@/lib/types'
