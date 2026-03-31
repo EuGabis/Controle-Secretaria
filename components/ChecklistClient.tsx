@@ -1,5 +1,7 @@
 'use client'
 
+// v8.1 - Checklist Inteligente (Shift/Links)
+
 import { useState, useMemo, useEffect } from 'react'
 import { ChecklistItem, ChecklistTurma, ChecklistResposta } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
