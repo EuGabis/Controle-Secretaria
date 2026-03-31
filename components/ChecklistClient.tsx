@@ -1,9 +1,15 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { ChecklistItem, ChecklistTurma, ChecklistResposta, Usuario } from '@/lib/types'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { ChecklistItem, ChecklistTurma, ChecklistResposta } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, Edit2, Check, X, Loader2, Info } from 'lucide-react'
+import { 
+  Plus, Trash2, Edit3, CheckCircle2, Circle, 
+  Calendar, Type, Save, Loader2, X, ChevronRight, 
+  Settings2, GripVertical, MoreHorizontal 
+} from 'lucide-react'
+import { format, parseISO } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 
 interface Props {
   itens: ChecklistItem[]
@@ -17,12 +23,13 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
   const [itens, setItens] = useState(initialItens)
   const [turmas, setTurmas] = useState(initialTurmas)
   const [respostas, setRespostas] = useState(initialRespostas)
-  const [loading, setLoading] = useState<string | null>(null)
+  const [saving, setSaving] = useState<string | null>(null)
+  const [editingItem, setEditingItem] = useState<{ id: string, titulo: string, tipo: string } | null>(null)
   
   const isAdmin = perfil === 'admin' || perfil === 'master'
   const supabase = createClient()
 
-  // Mapeamento para acesso rápido às respostas [itemId-turmaId]
+  // Mapeamento otimizado de respostas
   const respostasMap = useMemo(() => {
     const map: Record<string, ChecklistResposta> = {}
     respostas.forEach(r => {
@@ -31,34 +38,28 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
     return map
   }, [respostas])
 
-  const handleToggleStatus = async (itemId: string, turmaId: string) => {
+  // Lógica de Salvamento Universal (Spreadsheet Style)
+  const saveCell = useCallback(async (itemId: string, turmaId: string, updates: Partial<ChecklistResposta>) => {
     const key = `${itemId}-${turmaId}`
-    const atual = respostasMap[key]
-    const loadingKey = `toggle-${key}`
-    setLoading(loadingKey)
+    setSaving(key)
+    
+    const existing = respostasMap[key]
 
-    const proximos: Record<string, 'OK' | 'N/A' | 'PENDENTE'> = {
-      'PENDENTE': 'OK',
-      'OK': 'N/A',
-      'N/A': 'PENDENTE'
-    }
-    const novoStatus = atual ? proximos[atual.status] : 'OK'
-
-    if (atual) {
+    if (existing) {
       const { data, error } = await supabase
         .from('checklist_respostas')
-        .update({ status: novoStatus, respondido_por: usuarioId, updated_at: new Date().toISOString() })
-        .eq('id', atual.id)
+        .update({ ...updates, respondido_por: usuarioId, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
         .select()
         .single()
 
       if (!error && data) {
-        setRespostas(prev => prev.map(r => r.id === atual.id ? { ...r, ...data } : r))
+        setRespostas(prev => prev.map(r => r.id === existing.id ? { ...r, ...data } : r))
       }
     } else {
       const { data, error } = await supabase
         .from('checklist_respostas')
-        .insert({ item_id: itemId, turma_id: turmaId, status: novoStatus, respondido_por: usuarioId })
+        .insert({ item_id: itemId, turma_id: turmaId, ...updates, respondido_por: usuarioId })
         .select()
         .single()
 
@@ -66,28 +67,29 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         setRespostas(prev => [...prev, data])
       }
     }
-    setLoading(null)
-  }
+    
+    setTimeout(() => setSaving(null), 800)
+  }, [respostasMap, supabase, usuarioId])
 
+  // Handlers para Admin
   const handleAddItem = async () => {
     if (!isAdmin) return
-    const titulo = prompt('Título do novo item de checklist:')
+    const titulo = prompt('Nome da nova etapa do processo:')
     if (!titulo) return
+    const tipo = prompt('Tipo de campo (check, texto, data):', 'check') as any
 
     const { data, error } = await supabase
       .from('checklist_itens')
-      .insert({ titulo, ordem: itens.length })
+      .insert({ titulo, tipo_campo: tipo, ordem: itens.length })
       .select()
       .single()
 
-    if (!error && data) {
-      setItens(prev => [...prev, data])
-    }
+    if (!error && data) setItens(prev => [...prev, data])
   }
 
   const handleAddTurma = async () => {
     if (!isAdmin) return
-    const nome = prompt('Nome da nova Turma (ex: TBC JULHO):')
+    const nome = prompt('Nome da nova Turma / Período:')
     if (!nome) return
 
     const { data, error } = await supabase
@@ -96,145 +98,513 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
       .select()
       .single()
 
-    if (!error && data) {
-      setTurmas(prev => [...prev, data])
-    }
+    if (!error && data) setTurmas(prev => [...prev, data])
   }
 
   const handleDeleteItem = async (id: string) => {
-    if (!isAdmin || !confirm('Excluir este item de todos os checklists?')) return
+    if (!isAdmin || !confirm('Excluir este item permanentemente?')) return
     const { error } = await supabase.from('checklist_itens').delete().eq('id', id)
     if (!error) setItens(prev => prev.filter(i => i.id !== id))
   }
 
   const handleDeleteTurma = async (id: string) => {
-    if (!isAdmin || !confirm('Excluir esta turma e todos os seus registros de checklist?')) return
+    if (!isAdmin || !confirm('Excluir esta turma inteira?')) return
     const { error } = await supabase.from('checklist_turmas').delete().eq('id', id)
     if (!error) setTurmas(prev => prev.filter(t => t.id !== id))
   }
 
+  const renameTurma = async (id: string, oldName: string) => {
+    if (!isAdmin) return
+    const novoNome = prompt('Renomear turma:', oldName)
+    if (!novoNome || novoNome === oldName) return
+    const { error } = await supabase.from('checklist_turmas').update({ nome: novoNome }).eq('id', id)
+    if (!error) setTurmas(prev => prev.map(t => t.id === id ? { ...t, nome: novoNome } : t))
+  }
+
   return (
-    <div className="glass" style={{ padding: '24px', overflowX: 'auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <div>
-          <h2 className="text-gradient" style={{ fontSize: '24px', fontWeight: '800', margin: 0 }}>Checklist MMA</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '4px' }}>Acompanhamento de processos por turma</p>
+    <div className="checklist-container">
+      {/* Header Profissional */}
+      <div className="checklist-header">
+        <div className="header-info">
+          <div className="icon-wrapper">
+            <Settings2 size={24} color="#fff" />
+          </div>
+          <div>
+            <h1 className="text-gradient">Checklist Operacional</h1>
+            <p>Gerenciamento de fluxos e prazos por turma</p>
+          </div>
         </div>
+        
         {isAdmin && (
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button className="btn-secondary" onClick={handleAddItem} style={{ fontSize: '12px', padding: '8px 12px' }}>
-              <Plus size={14} /> Novo Item (Linha)
+          <div className="admin-actions">
+            <button className="glass-btn secondary" onClick={handleAddItem}>
+              <Plus size={16} /> Etapa
             </button>
-            <button className="btn-primary" onClick={handleAddTurma} style={{ fontSize: '12px', padding: '8px 12px' }}>
-              <Plus size={14} /> Nova Turma (Coluna)
+            <button className="glass-btn primary" onClick={handleAddTurma}>
+              <Plus size={16} /> Turma
             </button>
           </div>
         )}
       </div>
 
-      <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
-        <thead>
-          <tr>
-            <th style={{ textAlign: 'left', padding: '16px', borderBottom: '1px solid var(--border)', position: 'sticky', left: 0, background: 'rgba(20,20,30,0.95)', zIndex: 10 }}>
-              Processo / Tarefa
-            </th>
-            {turmas.map(t => (
-              <th key={t.id} style={{ padding: '16px', borderBottom: '1px solid var(--border)', minWidth: '120px', textAlign: 'center' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: '700' }}>{t.nome}</span>
-                  {isAdmin && (
-                    <button onClick={() => handleDeleteTurma(t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', opacity: 0.5 }}>
-                      <Trash2 size={12} />
-                    </button>
-                  )}
-                </div>
+      {/* Grid Style Table */}
+      <div className="checklist-grid-wrapper glass">
+        <table className="checklist-table">
+          <thead>
+            <tr>
+              <th className="sticky-col header-cell main-header">
+                PROCESSO
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {itens.map((item, idx) => (
-            <tr key={item.id} style={{ transition: 'background 0.2s' }} className="table-row-hover">
-              <td style={{ 
-                padding: '16px', 
-                borderBottom: '1px solid var(--border)', 
-                position: 'sticky', 
-                left: 0, 
-                background: 'rgba(20,20,30,0.95)', 
-                zIndex: 5,
-                fontSize: '13px',
-                fontWeight: '500'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{idx + 1}.</span>
-                  <span>{item.titulo}</span>
-                  {isAdmin && (
-                    <button onClick={() => handleDeleteItem(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', opacity: 0.3 }}>
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-              </td>
-              {turmas.map(turma => {
-                const resp = respostasMap[`${item.id}-${turma.id}`]
-                const isLoading = loading === `toggle-${item.id}-${turma.id}`
-                
-                return (
-                  <td key={turma.id} style={{ padding: '8px', borderBottom: '1px solid var(--border)', textAlign: 'center' }}>
-                    <button
-                      onClick={() => handleToggleStatus(item.id, turma.id)}
-                      disabled={isLoading}
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '8px',
-                        border: '1px solid var(--border)',
-                        background: resp?.status === 'OK' ? 'rgba(16,217,140,0.2)' : 
-                                   resp?.status === 'N/A' ? 'rgba(255,255,255,0.05)' : 
-                                   'transparent',
-                        color: resp?.status === 'OK' ? 'var(--accent-green)' : 
-                               resp?.status === 'N/A' ? 'var(--text-muted)' : 
-                               'var(--text-muted)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        margin: '0 auto',
-                        transition: 'all 0.2s',
-                        fontSize: '11px',
-                        fontWeight: '700'
-                      }}
-                    >
-                      {isLoading ? <Loader2 size={14} className="spin" /> : (
-                        resp?.status === 'OK' ? <Check size={18} /> :
-                        resp?.status === 'N/A' ? 'N/A' :
-                        null
-                      )}
-                    </button>
-                  </td>
-                )
-              })}
+              {turmas.map(turma => (
+                <th key={turma.id} className="header-cell column-header">
+                  <div className="column-label">
+                    <span onClick={() => renameTurma(turma.id, turma.nome)} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
+                      {turma.nome}
+                    </span>
+                    {isAdmin && (
+                      <button className="icon-btn delete" onClick={() => handleDeleteTurma(turma.id)}>
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {itens.map((item, idx) => (
+              <tr key={item.id} className="row-hover">
+                <td className="sticky-col body-cell process-info">
+                  <div className="process-content">
+                    <div className="drag-handle"><GripVertical size={14} /></div>
+                    <div className="process-text">
+                      <span className="process-index">{String(idx + 1).padStart(2, '0')}</span>
+                      <span className="process-title">{item.titulo}</span>
+                      <div className="process-badge">
+                        {item.tipo_campo === 'check' && <CheckCircle2 size={10} />}
+                        {item.tipo_campo === 'texto' && <Type size={10} />}
+                        {item.tipo_campo === 'data' && <Calendar size={10} />}
+                        {item.tipo_campo}
+                      </div>
+                    </div>
+                    {isAdmin && (
+                      <button className="icon-btn" onClick={() => handleDeleteItem(item.id)}>
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                </td>
+                
+                {turmas.map(turma => {
+                  const resp = respostasMap[`${item.id}-${turma.id}`]
+                  const isSaving = saving === `${item.id}-${turma.id}`
+                  
+                  return (
+                    <td key={turma.id} className="body-cell input-cell">
+                      <div className={`cell-wrapper ${isSaving ? 'cell-saving' : ''}`}>
+                        {/* INPUTS DINÂMICOS */}
+                        {item.tipo_campo === 'check' && (
+                          <button 
+                            className={`check-input ${resp?.status_check ? 'checked' : ''}`}
+                            onClick={() => saveCell(item.id, turma.id, { status_check: !resp?.status_check })}
+                          >
+                            {resp?.status_check ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+                          </button>
+                        )}
 
-      {itens.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>
-          Nenhum item configurado. {isAdmin && 'Clique em "Novo Item" para começar.'}
-        </div>
-      )}
+                        {item.tipo_campo === 'texto' && (
+                          <textarea 
+                            className="text-input"
+                            placeholder="..."
+                            defaultValue={resp?.valor_texto || ''}
+                            onBlur={(e) => {
+                              if (e.target.value !== (resp?.valor_texto || '')) {
+                                saveCell(item.id, turma.id, { valor_texto: e.target.value })
+                              }
+                            }}
+                          />
+                        )}
+
+                        {item.tipo_campo === 'data' && (
+                          <div className="date-input-wrapper">
+                            <input 
+                              type="date"
+                              className="date-input"
+                              defaultValue={resp?.valor_data || ''}
+                              onChange={(e) => {
+                                saveCell(item.id, turma.id, { valor_data: e.target.value })
+                              }}
+                            />
+                            {!resp?.valor_data && <Calendar className="date-icon" size={14} />}
+                          </div>
+                        )}
+
+                        {isSaving && <div className="saving-indicator"><Loader2 size={10} className="spin" /></div>}
+                      </div>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <style jsx>{`
-        .table-row-hover:hover td {
-          background: rgba(255,255,255,0.02) !important;
+        .checklist-container {
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+          animation: fadeIn 0.5s ease-out;
         }
+
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .checklist-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0 4px;
+        }
+
+        .header-info {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .icon-wrapper {
+          width: 48px;
+          height: 48px;
+          background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 8px 16px rgba(79, 124, 255, 0.3);
+        }
+
+        .checklist-header h1 {
+          font-size: 26px;
+          font-weight: 800;
+          margin: 0;
+          letter-spacing: -0.02em;
+        }
+
+        .checklist-header p {
+          color: var(--text-muted);
+          font-size: 14px;
+          margin-top: 2px;
+        }
+
+        .admin-actions {
+          display: flex;
+          gap: 12px;
+        }
+
+        /* Buttons */
+        .glass-btn {
+          padding: 10px 20px;
+          border-radius: 12px;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .glass-btn.primary {
+          background: var(--accent-blue);
+          color: white;
+          box-shadow: 0 4px 12px rgba(79, 124, 255, 0.2);
+        }
+
+        .glass-btn.secondary {
+          background: rgba(255,255,255,0.05);
+          color: var(--text-primary);
+          backdrop-filter: blur(10px);
+        }
+
+        .glass-btn:hover {
+          transform: translateY(-2px);
+          filter: brightness(1.1);
+          border-color: rgba(255,255,255,0.3);
+        }
+
+        /* Grid / Table */
+        .checklist-grid-wrapper {
+          border-radius: 20px;
+          overflow: auto;
+          position: relative;
+          border: 1px solid var(--border);
+          max-height: calc(100vh - 200px);
+        }
+
+        .checklist-table {
+          width: 100%;
+          border-collapse: separate;
+          border-spacing: 0;
+        }
+
+        .header-cell {
+          background: rgba(15, 15, 25, 0.8);
+          backdrop-filter: blur(20px);
+          padding: 16px;
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          border-bottom: 1px solid var(--border);
+          position: sticky;
+          top: 0;
+          z-index: 20;
+        }
+
+        .sticky-col {
+          position: sticky;
+          left: 0;
+          z-index: 30;
+          width: 320px;
+          min-width: 320px;
+        }
+
+        .main-header {
+          z-index: 40;
+          background: rgba(20, 20, 35, 1);
+        }
+
+        .column-header {
+          min-width: 180px;
+          text-align: center;
+          border-left: 1px solid var(--border);
+        }
+
+        .column-label {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+
+        .process-info {
+          background: rgba(15, 15, 25, 0.8);
+          backdrop-filter: blur(20px);
+          border-right: 1px solid var(--border);
+        }
+
+        .process-content {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .drag-handle {
+          cursor: grab;
+          color: var(--text-muted);
+          opacity: 0.3;
+        }
+
+        .process-text {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .process-index {
+          font-size: 9px;
+          font-family: 'JetBrains Mono', monospace;
+          color: var(--accent-blue);
+          font-weight: 800;
+        }
+
+        .process-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+
+        .process-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 10px;
+          color: var(--text-muted);
+          background: rgba(255,255,255,0.05);
+          padding: 2px 8px;
+          border-radius: 6px;
+          width: fit-content;
+          text-transform: capitalize;
+        }
+
+        .body-cell {
+          padding: 8px;
+          border-bottom: 1px solid var(--border);
+          vertical-align: middle;
+        }
+
+        .input-cell {
+          border-left: 1px solid var(--border);
+          min-width: 180px;
+        }
+
+        .cell-wrapper {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 50px;
+          border-radius: 8px;
+          transition: all 0.3s;
+        }
+
+        .cell-saving {
+          background: rgba(79, 124, 255, 0.05);
+        }
+
+        /* Input Styles */
+        .check-input {
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--text-muted);
+          transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .check-input:hover {
+          transform: scale(1.2);
+          color: var(--accent-blue);
+        }
+
+        .check-input.checked {
+          color: var(--accent-green);
+          filter: drop-shadow(0 0 8px rgba(16, 217, 140, 0.4));
+        }
+
+        .text-input {
+          width: 100%;
+          background: transparent;
+          border: 1px solid transparent;
+          border-radius: 6px;
+          padding: 8px;
+          color: var(--text-secondary);
+          font-size: 13px;
+          font-family: inherit;
+          resize: none;
+          min-height: 40px;
+          text-align: center;
+          transition: all 0.2s;
+        }
+
+        .text-input:focus {
+          outline: none;
+          background: rgba(255,255,255,0.05);
+          border-color: var(--accent-blue);
+          text-align: left;
+        }
+
+        .date-input-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+        }
+
+        .date-input {
+          background: transparent;
+          border: 1px solid transparent;
+          border-radius: 6px;
+          padding: 8px;
+          color: var(--text-secondary);
+          font-size: 13px;
+          font-family: inherit;
+          cursor: pointer;
+          width: 100%;
+          text-align: center;
+        }
+
+        .date-input:focus {
+          outline: none;
+          background: rgba(255,255,255,0.05);
+          border-color: var(--accent-blue);
+        }
+
+        .date-icon {
+          position: absolute;
+          right: 12px;
+          opacity: 0.3;
+          pointer-events: none;
+        }
+
+        .icon-btn {
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--text-muted);
+          opacity: 0;
+          transition: all 0.2s;
+          padding: 4px;
+          border-radius: 4px;
+        }
+
+        .row-hover:hover .icon-btn {
+          opacity: 0.5;
+        }
+
+        .icon-btn:hover {
+          opacity: 1 !important;
+          background: rgba(255,255,255,0.05);
+        }
+
+        .icon-btn.delete:hover {
+          color: var(--accent-red);
+          background: rgba(255, 77, 106, 0.1);
+        }
+
+        .saving-indicator {
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          color: var(--accent-blue);
+          opacity: 0.8;
+        }
+
         .spin {
           animation: spin 1s linear infinite;
         }
+
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+
+        /* Scrollbar Profissional */
+        .checklist-grid-wrapper::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        .checklist-grid-wrapper::-webkit-scrollbar-track {
+          background: rgba(0,0,0,0.1);
+        }
+        .checklist-grid-wrapper::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.1);
+          border-radius: 10px;
+        }
+        .checklist-grid-wrapper::-webkit-scrollbar-thumb:hover {
+          background: rgba(255,255,255,0.2);
         }
       `}</style>
     </div>

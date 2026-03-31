@@ -77,7 +77,7 @@ export interface AuditLog {
 export interface ChecklistItem {
   id: string
   titulo: string
-  contexto: string | null
+  tipo_campo: 'check' | 'texto' | 'data'
   ordem: number
   created_at: string
 }
@@ -93,7 +93,9 @@ export interface ChecklistResposta {
   id: string
   item_id: string
   turma_id: string
-  status: 'OK' | 'N/A' | 'PENDENTE'
+  valor_texto: string | null
+  valor_data: string | null
+  status_check: boolean
   respondido_por: string | null
   updated_at: string
   autor?: Usuario
