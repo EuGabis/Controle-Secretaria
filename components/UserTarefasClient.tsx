@@ -168,7 +168,7 @@ export default function UserTarefasClient({ tarefas: initialTarefas, userId }: P
         isAdmin={false} 
         onEdit={handleEdit} 
         onUpdate={async () => {
-           // Recarrega se necessário via prop/initial
+           // Recarrega se necessário
         }}
       />
 

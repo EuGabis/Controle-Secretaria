@@ -19,6 +19,7 @@ interface KanbanProps {
   isAdmin?: boolean
   onUpdate?: () => void
   onEdit?: (tarefa: Tarefa) => void
+  onDelete?: (id: string) => void
 }
 
 const COLUMNS: { id: StatusTarefa; label: string; emoji: string; color: string }[] = [
@@ -191,53 +192,57 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
                   {onEdit && (
                     <button
                       onClick={() => onEdit(tarefa)}
-                      style={{ flex: '1 1 45%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px', fontSize: '11px', fontWeight: '600', background: 'rgba(79,124,255,0.1)', color: 'var(--accent-blue)', border: '1px solid rgba(79,124,255,0.3)', borderRadius: '6px', cursor: 'pointer' }}
+                      style={{ flex: '1 1 100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px', fontSize: '11px', fontWeight: '600', background: 'rgba(79,124,255,0.1)', color: 'var(--accent-blue)', border: '1px solid rgba(79,124,255,0.3)', borderRadius: '6px', cursor: 'pointer' }}
                     >
                       <Edit size={12} /> Editar
                     </button>
                   )}
-                  {tarefa.status !== 'cancelada' && (
-                    <button
-                      onClick={async () => {
-                        const motivo = prompt('Deseja CANCELAR esta tarefa?\n\n(Opcional) Digite o motivo do cancelamento abaixo:')
-                        if (motivo !== null) {
-                          const novaObs = motivo.trim() 
-                            ? `${tarefa.observacao ? tarefa.observacao + '\n\n' : ''}🚫 Cancelada: ${motivo.trim()}`
-                            : tarefa.observacao;
+                  {isAdmin && (
+                    <>
+                      {tarefa.status !== 'cancelada' && (
+                        <button
+                          onClick={async () => {
+                            const motivo = prompt('Deseja CANCELAR esta tarefa?\n\n(Opcional) Digite o motivo do cancelamento abaixo:')
+                            if (motivo !== null) {
+                              const novaObs = motivo.trim() 
+                                ? `${tarefa.observacao ? tarefa.observacao + '\n\n' : ''}🚫 Cancelada: ${motivo.trim()}`
+                                : tarefa.observacao;
 
-                          const updates: any = { status: 'cancelada' }
-                          if (motivo.trim()) updates.observacao = novaObs;
+                              const updates: any = { status: 'cancelada' }
+                              if (motivo.trim()) updates.observacao = novaObs;
 
-                          const { error } = await supabase.from('tarefas').update(updates).eq('id', tarefa.id)
-                          if (error) {
-                            alert(`Erro ao cancelar: ${error.message} \nO banco de dados precisa aceitar o status 'cancelada'.`)
-                            return
+                              const { error } = await supabase.from('tarefas').update(updates).eq('id', tarefa.id)
+                              if (error) {
+                                alert(`Erro ao cancelar: ${error.message} \nO banco de dados precisa aceitar o status 'cancelada'.`)
+                                return
+                              }
+                              
+                              if (motivo.trim()) setObs(novaObs as string);
+                              onStatusChange(tarefa.id, 'cancelada', motivo.trim() ? (novaObs as string) : undefined)
+                            }
+                          }}
+                          style={{ flex: '1 1 45%', marginTop: '8px', padding: '6px', fontSize: '11px', fontWeight: '600', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+                        >
+                          🚫 Cancelar
+                        </button>
+                      )}
+                      <button
+                        onClick={async () => {
+                          if (confirm('Atenção: A EXCLUSÃO é permanente! Deseja remover do banco de dados?')) {
+                            const { error } = await supabase.from('tarefas').delete().eq('id', tarefa.id)
+                            if (error) {
+                              alert(`Erro ao excluir: ${error.message}`)
+                              return
+                            }
+                            onDelete?.(tarefa.id)
                           }
-                          
-                          if (motivo.trim()) setObs(novaObs as string);
-                          onStatusChange(tarefa.id, 'cancelada', motivo.trim() ? (novaObs as string) : undefined)
-                        }
-                      }}
-                      style={{ flex: '1 1 45%', padding: '6px', fontSize: '11px', fontWeight: '600', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
-                    >
-                      🚫 Cancelar
-                    </button>
+                        }}
+                        style={{ flex: '1 1 45%', marginTop: '8px', padding: '6px', fontSize: '11px', fontWeight: '600', background: 'rgba(255,77,106,0.1)', color: 'var(--accent-red)', border: '1px solid rgba(255,77,106,0.3)', borderRadius: '6px', cursor: 'pointer' }}
+                      >
+                        🗑️ Excluir
+                      </button>
+                    </>
                   )}
-                  <button
-                    onClick={async () => {
-                      if (confirm('Atenção: A EXCLUSÃO é permanente! Deseja remover do banco de dados?')) {
-                        const { error } = await supabase.from('tarefas').delete().eq('id', tarefa.id)
-                        if (error) {
-                          alert(`Erro ao excluir: ${error.message}`)
-                          return
-                        }
-                        onDelete(tarefa.id)
-                      }
-                    }}
-                    style={{ flex: '1 1 100%', padding: '6px', fontSize: '11px', fontWeight: '600', background: 'rgba(255,77,106,0.1)', color: 'var(--accent-red)', border: '1px solid rgba(255,77,106,0.3)', borderRadius: '6px', cursor: 'pointer' }}
-                  >
-                    🗑️ Excluir
-                  </button>
                 </div>
               )}
             </div>
@@ -271,7 +276,7 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
   )
 }
 
-export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, onUpdate, onEdit }: KanbanProps) {
+export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, onUpdate, onEdit, onDelete }: KanbanProps) {
   const [tarefas, setTarefas] = useState(initialTarefas)
   const [dragOverCol, setDragOverCol] = useState<StatusTarefa | null>(null)
   const dragIdRef = useRef<string | null>(null)
@@ -346,8 +351,9 @@ export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, 
 
   const handleDelete = useCallback((id: string) => {
     setTarefas(prev => prev.filter(t => t.id !== id))
+    if (onDelete) onDelete(id)
     if (onUpdate) onUpdate()
-  }, [onUpdate])
+  }, [onUpdate, onDelete])
 
   const visibleColumns = isAdmin 
     ? [...COLUMNS, { id: 'cancelada', label: 'Canceladas', emoji: '🚫', color: 'var(--accent-red)' } as const] 
