@@ -215,11 +215,17 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         <div className="overlay-v8" onClick={() => setEditingItem(null)}>
            <div className="modal-v8 glass scale-in" onClick={e => e.stopPropagation()}>
               <div className="m-h">
-                 <h3>EDITAR ETAPA #{editingItem.item_n}</h3>
-                 <button onClick={() => setEditingItem(null)} className="close-x"><X/></button>
+                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div className="modal-icon-header"><Edit3 size={18}/></div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                       <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '900' }}>EDITAR ETAPA DO PROCESSO</h3>
+                       <span style={{ fontSize: '10px', color: '#666', fontWeight: '700' }}>CONFIGURAÇÕES DA ETAPA #{editingItem.item_n}</span>
+                    </div>
+                 </div>
+                 <button onClick={() => setEditingItem(null)} className="close-x"><X size={20}/></button>
               </div>
               <div className="m-b">
-                 <div className="grid-3">
+                 <div className="modal-grid-top">
                     <div className="f-group">
                        <label>Nº ORDEM / ID</label>
                        <input className="inp-v8" type="number" value={editingItem.item_n} onChange={e => setEditingItem({...editingItem, item_n: parseInt(e.target.value)})} />
@@ -229,23 +235,23 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                        <input className="inp-v8" value={editingItem.contexto || ''} onChange={e => setEditingItem({...editingItem, contexto: e.target.value.toUpperCase()})} placeholder="EX: D-10" />
                     </div>
                     <div className="f-group">
-                       <label>RESPONSÁVEL</label>
+                       <label>RESPONSÁVEL PADRÃO</label>
                        <input className="inp-v8" value={editingItem.responsavel || ''} onChange={e => setEditingItem({...editingItem, responsavel: e.target.value.toUpperCase()})} placeholder="QUEM FAZ?" />
                     </div>
                  </div>
 
                  <div className="f-group">
-                    <label>TÍTULO DA ETAPA DO PROCESSO</label>
+                    <label>TÍTULO PRINCIPAL DA ETAPA</label>
                     <input className="inp-v8 main-title-inp" value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value.toUpperCase()})} placeholder="NOME DA TAREFA" />
                  </div>
 
                  <div className="f-group">
-                    <label>DESCRIÇÃO DETALHADA E LINKS</label>
-                    <textarea className="inp-v8 desc-area" rows={6} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} placeholder="DETALHE O PROCESSO OU COLE LINKS AQUI" />
+                    <label>DESCRIÇÃO DETALHADA E LINKS ÚTEIS</label>
+                    <textarea className="inp-v8 desc-area" rows={5} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} placeholder="DETALHE O PROCESSO OU COLE LINKS AQUI" />
                  </div>
               </div>
               <div className="m-f">
-                 <button className="btn-v8 primary" onClick={async () => {
+                 <button className="btn-v8 primary-gradient" onClick={async () => {
                     setSaving('modal-save')
                     const targetN = editingItem.item_n
                     const oldItem = itens.find(i => i.id === editingItem.id)
@@ -274,7 +280,7 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                     }
                     setSaving(null)
                  }}>
-                    {saving === 'modal-save' ? <><Loader2 size={16} className="spin"/> SALVANDO E REORDENANDO...</> : <><Save size={16}/> SALVAR MUDANÇAS</>}
+                    {saving === 'modal-save' ? <><Loader2 size={16} className="spin"/> PROCESSANDO...</> : <><Save size={16}/> SALVAR ALTERAÇÕES</>}
                  </button>
               </div>
            </div>
@@ -305,58 +311,62 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
       )}
 
       <style jsx>{`
-        .checklist-v9 { display: flex; flex-direction: column; gap: 20px; color: #fff; text-transform: uppercase; padding-bottom: 80px; }
-        .glass { background: rgba(10, 10, 18, 0.95); backdrop-filter: blur(25px); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+        .checklist-v9 { display: flex; flex-direction: column; gap: 24px; color: #fff; text-transform: uppercase; padding-bottom: 80px; font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(10, 10, 18, 0.96); backdrop-filter: blur(25px); border: 1px solid rgba(255,255,255,0.06); border-radius: 24px; box-shadow: 0 30px 60px rgba(0,0,0,0.6); }
         
-        .h-v8 { padding: 25px; display: flex; justify-content: space-between; align-items: center; }
-        .h-v8-left { display: flex; align-items: center; gap: 18px; }
-        .h-v8-badge { width: 50px; height: 50px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(79, 124, 255, 0.3); }
-        .h-v8-title { background: transparent; border: none; font-size: 22px; font-weight: 900; color: #fff; width: 450px; outline: none; text-transform: uppercase; letter-spacing: -0.02em; }
-        .h-v8-sub { background: transparent; border: none; font-size: 11px; color: #666; font-weight: 700; width: 100%; outline: none; margin-top: 4px; letter-spacing: 0.05em; }
+        .h-v8 { padding: 25px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .h-v8-left { display: flex; align-items: center; gap: 20px; }
+        .h-v8-badge { width: 48px; height: 48px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px rgba(79, 124, 255, 0.3); }
+        .h-v8-title { background: transparent; border: none; font-size: 20px; font-weight: 900; color: #fff; width: 450px; outline: none; text-transform: uppercase; letter-spacing: -0.01em; }
+        .h-v8-sub { background: transparent; border: none; font-size: 10px; color: #555; font-weight: 700; width: 100%; outline: none; margin-top: 4px; letter-spacing: 0.1em; }
 
-        .t-v8 { width: 100%; border-collapse: collapse; min-width: 1500px; }
-        .t-v8 th { background: #050508; padding: 20px 16px; font-size: 10px; color: #555; font-weight: 900; text-align: left; position: sticky; top: 0; z-index: 10; border-bottom: 2px solid #1a1a24; }
-        .t-v8 td { padding: 18px 16px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; vertical-align: middle; transition: 0.2s; }
-        .t-v8 tr:hover td { background: rgba(255,255,255,0.01); }
+        .t-v8 { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1500px; }
+        .t-v8 th { background: #080811; padding: 18px 16px; font-size: 9px; color: #444; font-weight: 900; text-align: left; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #1a1a24; letter-spacing: 0.1em; }
+        .t-v8 td { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 12px; vertical-align: middle; }
         
-        .n-pill { background: rgba(79, 124, 255, 0.1); border: 1px solid rgba(79, 124, 255, 0.2); padding: 6px 14px; border-radius: 10px; color: #4f7cff; font-weight: 900; font-size: 14px; }
-        .bold { font-weight: 800; } .blue-txt { color: #4f7cff; font-weight: 700; } .dim { color: #888; font-size: 12px; line-height: 1.6; max-width: 400px; }
-        .inp-v8 { background: rgba(20, 20, 35, 0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; color: #fff; width: 100%; outline: none; font-size: 13px; transition: all 0.2s; }
-        .inp-v8:focus { border-color: #4f7cff; background: rgba(79, 124, 255, 0.05); }
-        .status-inp { color: #10d98c; font-weight: 800; border-color: rgba(16,217,140,0.15); }
-        .loader-mini { position: absolute; top: -10px; right: -10px; background: #4f7cff; border-radius: 50%; padding: 5px; box-shadow: 0 0 15px rgba(79, 124, 255, 0.5); }
-        .p-rel { position: relative; width: 240px; }
-
-        .btn-v8 { display: flex; align-items: center; gap: 10px; padding: 14px 24px; border-radius: 15px; font-size: 12px; font-weight: 800; cursor: pointer; border: none; transition: 0.3s; text-transform: uppercase; }
-        .btn-v8.primary { background: linear-gradient(135deg, #4f7cff, #8b5cf6); color: #fff; box-shadow: 0 10px 25px rgba(79, 124, 255, 0.2); }
-        .btn-v8.primary:hover { transform: translateY(-2px); box-shadow: 0 15px 30px rgba(79, 124, 255, 0.3); }
-        .btn-v8.silver { background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); }
-        .btn-v8.silver:hover { background: rgba(255,255,255,0.1); }
-
-        .footer-v8 { padding: 40px; display: flex; justify-content: center; }
-        .add-v8 { background: rgba(255,255,255,0.02); border: 2px dashed rgba(255,255,255,0.1); color: #555; padding: 25px 50px; border-radius: 20px; font-weight: 900; cursor: pointer; transition: 0.3s; display: flex; align-items: center; gap: 12px; font-size: 14px; }
-        .add-v8:hover { border-color: #4f7cff; color: #4f7cff; background: rgba(79, 124, 255, 0.05); transform: scale(1.02); }
+        .n-pill { background: rgba(79, 124, 255, 0.08); border: 1px solid rgba(79, 124, 255, 0.15); padding: 5px 12px; border-radius: 10px; color: #4f7cff; font-weight: 900; font-size: 13px; }
+        .bold { font-weight: 800; color: #eee; } .blue-txt { color: #4f7cff; font-weight: 700; font-size: 11px; } 
+        .dim { color: #777; font-size: 11px; line-height: 1.6; max-width: 450px; text-transform: none; }
         
-        .overlay-v8 { position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(15px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-        .modal-v8 { width: 100%; max-width: 750px; } 
-        .m-h { padding: 30px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; } 
+        .inp-v8 { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px; color: #fff; width: 100%; outline: none; font-size: 13px; transition: all 0.2s; }
+        .inp-v8:focus { border-color: #4f7cff; background: rgba(79, 124, 255, 0.04); box-shadow: 0 0 15px rgba(79, 124, 255, 0.1); }
+        .status-inp { color: #10d98c; font-weight: 800; border-color: rgba(16,217,140,0.1); text-transform: uppercase; }
+        .p-rel { position: relative; width: 220px; }
+        .loader-mini { position: absolute; top: -8px; right: -8px; background: #4f7cff; border-radius: 50%; padding: 4px; box-shadow: 0 0 15px rgba(79, 124, 255, 0.4); }
+
+        .btn-v8 { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 14px; font-size: 11px; font-weight: 800; cursor: pointer; border: none; transition: 0.3s; }
+        .btn-v8.primary { background: #4f7cff; color: #fff; }
+        .primary-gradient { background: linear-gradient(135deg, #4f7cff, #8b5cf6); color: #fff; }
+        .btn-v8.silver { background: rgba(255,255,255,0.04); color: #888; border: 1px solid rgba(255,255,255,0.06); }
+        .btn-v8:hover { transform: translateY(-1px); filter: brightness(1.1); }
+
+        .footer-v8 { padding: 50px; display: flex; justify-content: center; }
+        .add-v8 { background: transparent; border: 1.5px dashed rgba(255,255,255,0.1); color: #444; padding: 25px 60px; border-radius: 24px; font-weight: 900; cursor: pointer; transition: 0.3s; display: flex; align-items: center; gap: 12px; font-size: 13px; }
+        .add-v8:hover { border-color: #4f7cff; color: #4f7cff; background: rgba(79, 124, 255, 0.03); border-style: solid; }
+        
+        .overlay-v8 { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-v8 { width: 100%; max-width: 680px; box-shadow: 0 50px 100px rgba(0,0,0,0.8); } 
+        .m-h { padding: 25px 30px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; } 
         .m-b { padding: 30px; display: flex; flex-direction: column; gap: 20px; } 
-        .m-f { padding: 25px 30px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: flex-end; }
+        .m-f { padding: 20px 30px; background: rgba(0,0,0,0.2); border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: flex-end; border-radius: 0 0 24px 24px; }
         
-        .grid-3 { display: grid; grid-template-columns: 120px 1fr 1fr; gap: 15px; }
-        .f-group { display: flex; flexDirection: column; gap: 8px; }
-        .f-group label { font-size: 10px; font-weight: 900; color: #555; letter-spacing: 0.05em; }
-        .main-title-inp { font-size: 16px; font-weight: 800; border-color: rgba(79, 124, 255, 0.3); }
-        .close-x { background: none; border: none; color: #fff; cursor: pointer; padding: 5px; opacity: 0.5; transition: 0.2s; }
-        .close-x:hover { opacity: 1; transform: rotate(90deg); }
-        .check-label { display: flex; alignItems: center; gap: 10px; font-size: 12px; cursor: pointer; margin-top: 10px; font-weight: 700; color: #ff4d6a; }
+        .modal-grid-top { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 15px; }
+        .modal-icon-header { width: 36px; height: 36px; background: rgba(79, 124, 255, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #4f7cff; }
+        .f-group { display: flex; flex-direction: column; gap: 8px; }
+        .f-group label { font-size: 9px; font-weight: 900; color: #444; letter-spacing: 0.08em; }
+        .main-title-inp { font-size: 15px; font-weight: 800; border-color: rgba(79, 124, 255, 0.2); }
+        .desc-area { text-transform: none; line-height: 1.5; font-size: 12px; color: #bbb; }
+        .close-x { background: rgba(255,255,255,0.03); border: none; color: #555; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; display: flex; }
+        .close-x:hover { background: rgba(255,77,106,0.1); color: #ff4d6a; transform: rotate(90deg); }
+        .check-label { display: flex; align-items: center; gap: 10px; font-size: 11px; cursor: pointer; margin-top: 5px; font-weight: 800; color: #ff4d6a; opacity: 0.7; }
+        .check-label:hover { opacity: 1; }
 
-        .scale-in { animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        .animation-fade { animation: fadeIn 0.5s ease; }
+        .scale-in { animation: scaleIn 0.3s cubic-bezier(0.2, 1, 0.3, 1); }
+        .animation-fade { animation: fadeIn 0.6s ease; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
       `}</style>
     </div>
   )
