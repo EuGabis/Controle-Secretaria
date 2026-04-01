@@ -145,9 +145,21 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                         <td className="bold">{item.contexto}</td>
                         <td className="blue-txt">{item.responsavel}</td>
                         <td className="bold">
-                           <div className="row-between" style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                           <div className="row-between" style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap: '8px'}}>
                               {item.titulo}
-                              {isAdmin && <button className="edit-btn" onClick={() => setEditingItem(item)} style={{background:'none', border:'none', color:'#4f7cff', cursor:'pointer', opacity:0.5}}><Edit3 size={12}/></button>}
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                {isAdmin && (
+                                  <>
+                                    <button className="edit-btn" onClick={() => setEditingItem(item)} style={{background:'none', border:'none', color:'#4f7cff', cursor:'pointer', opacity:0.5}}><Edit3 size={12}/></button>
+                                    <button className="del-btn" onClick={async () => {
+                                      if (confirm(`DESEJA REALMENTE EXCLUIR A ETAPA #${item.item_n}?`)) {
+                                        await supabase.from('checklist_itens').delete().eq('id', item.id)
+                                        setItens(prev => prev.filter(i => i.id !== item.id))
+                                      }
+                                    }} style={{background:'none', border:'none', color:'#ff4d6a', cursor:'pointer', opacity:0.5}}><Trash2 size={12}/></button>
+                                  </>
+                                )}
+                              </div>
                            </div>
                         </td>
                         <td className="dim">{renderFormattedText(item.descricao)}</td>
