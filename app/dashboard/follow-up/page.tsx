@@ -30,14 +30,8 @@ export default async function FollowUpPage(props: Props) {
 
   const hoje = new Date().toISOString().slice(0, 10)
 
-  let query = supabase
-    .from('follow_up_log')
-    .select('*, tarefa:tarefas!inner(titulo, criado_por), usuario:usuarios!inner(nome, master_id)')
-    .gte('alterado_em', `${hoje}T00:00:00`)
-    .order('alterado_em', { ascending: false })
-
   if (profile?.perfil === 'master') {
-    // Master vê todos os logs de hoje
+    // Master vê todos os logs de hoje sem filtro
   } else {
     query = query.eq('tarefa.criado_por', user.id)
   }
