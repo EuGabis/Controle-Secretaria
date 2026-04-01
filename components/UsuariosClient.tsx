@@ -251,6 +251,7 @@ export default function UsuariosClient({ usuarios: initial }: Props) {
                   {[
                     { v: 'usuario', l: '👤 Colaborador' },
                     { v: 'admin', l: '🛡️ Admin' },
+                    { v: 'master', l: '👑 Master' },
                   ].map(({ v, l }) => (
                     <button key={v} type="button" onClick={() => setForm(f => ({ ...f, perfil: v as Perfil }))}
                       style={{
@@ -295,7 +296,7 @@ export default function UsuariosClient({ usuarios: initial }: Props) {
 }
 
 function UserRow({ user, onEdit, onDelete }: { user: Usuario; onEdit: (u: Usuario) => void; onDelete: (u: Usuario) => void }) {
-  const isAdmin = user.perfil === 'admin'
+  const isAdmin = user.perfil === 'admin' || user.perfil === 'master'
   const isMaster = user.perfil === 'master'
   return (
     <div className="glass" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '14px' }}>

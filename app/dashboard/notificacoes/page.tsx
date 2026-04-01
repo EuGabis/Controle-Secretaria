@@ -9,8 +9,11 @@ export default async function NotificacoesPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('usuarios').select('*').eq('id', user.id).single()
-  const isAdmin = profile?.perfil === 'admin'
+  
+  // Master também é considerado Admin para fins de envio de notificações
+  const isAdmin = profile?.perfil === 'admin' || profile?.perfil === 'master'
 
+  // Para Master, listamos todos os usuários. Para Admin, listamos colaboradores.
   const { data: usuarios } = isAdmin
     ? await supabase.from('usuarios').select('*').eq('perfil', 'usuario')
     : { data: [] }

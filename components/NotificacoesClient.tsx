@@ -172,7 +172,7 @@ export default function NotificacoesClient({ notificacoes: initial, respostas: i
                       </div>
                     ) : threadRespostas.map(r => {
                       const isMe = r.de_usuario_id === userId
-                      const isAdminMsg = r.autor?.perfil === 'admin'
+                      const isAdminMsg = r.autor?.perfil === 'admin' || r.autor?.perfil === 'master'
                       return (
                         <div key={r.id} style={{
                           display: 'flex',

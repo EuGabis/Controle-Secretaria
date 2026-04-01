@@ -30,9 +30,17 @@ export default async function FollowUpPage(props: Props) {
 
   const hoje = new Date().toISOString().slice(0, 10)
 
+  // Query base do Follow Up
+  let query = supabase
+    .from('follow_up_log')
+    .select('*, tarefa:tarefas!inner(titulo, criado_por), usuario:usuarios!inner(nome)')
+    .gte('alterado_em', `${hoje}T00:00:00`)
+    .order('alterado_em', { ascending: false })
+
   if (profile?.perfil === 'master') {
-    // Master vê todos os logs de hoje sem filtro
+    // Master vê todos os logs de hoje sem filtro adicional
   } else {
+    // Admin vê apenas logs de tarefas que ele criou
     query = query.eq('tarefa.criado_por', user.id)
   }
 
@@ -69,21 +77,21 @@ export default async function FollowUpPage(props: Props) {
 
       {logs && logs.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {logs.map((log: Record<string, unknown>) => (
-            <div key={log.id as string} className="glass" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {logs.map((log: any) => (
+            <div key={log.id} className="glass" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div style={{
                 width: '40px', height: '40px', flexShrink: 0,
                 background: 'rgba(79,124,255,0.12)', borderRadius: '10px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '20px',
               }}>
-                {(log.usuario as Record<string, string>)?.nome?.charAt(0) || '?'}
+                {log.usuario?.nome?.charAt(0) || '?'}
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>
-                  {(log.usuario as Record<string, string>)?.nome}
+                  {log.usuario?.nome}
                   <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}> moveu </span>
-                  <span style={{ color: 'var(--accent-blue)' }}>{(log.tarefa as Record<string, string>)?.titulo}</span>
+                  <span style={{ color: 'var(--accent-blue)' }}>{log.tarefa?.titulo}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <span className={`badge ${statusColor[log.status_anterior as string]}`}>
@@ -96,7 +104,7 @@ export default async function FollowUpPage(props: Props) {
                 </div>
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'right', flexShrink: 0 }}>
-                {format(parseISO(log.alterado_em as string), 'HH:mm', { locale: ptBR })}
+                {format(parseISO(log.alterado_em), 'HH:mm', { locale: ptBR })}
               </div>
             </div>
           ))}
