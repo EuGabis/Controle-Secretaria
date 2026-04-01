@@ -186,7 +186,7 @@ function TarefaCard({ tarefa, isAdmin, onStatusChange, onProgressChange, onDragS
                 onChange={e => setObs(e.target.value)}
                 onBlur={saveObs}
               />
-              {isAdmin && (
+              {(isAdmin || onEdit) && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--border)' }}>
                   {onEdit && (
                     <button

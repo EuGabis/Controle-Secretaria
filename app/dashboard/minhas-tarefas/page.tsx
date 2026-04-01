@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import KanbanBoard from '@/components/KanbanBoard'
+import UserTarefasClient from '@/components/UserTarefasClient'
 
 export default async function MinhasTarefasPage(props: { searchParams?: Promise<{ tipo?: string }> }) {
   const searchParams = props.searchParams ? await props.searchParams : undefined;
@@ -39,11 +39,11 @@ export default async function MinhasTarefasPage(props: { searchParams?: Promise<
           Minhas Tarefas{filterLabel}
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-          Olá, <strong>{profile?.nome}</strong>! Aqui estão as tarefas atribuídas a você.
+          Olá, <strong>{profile?.nome}</strong>! Use o botão abaixo para criar suas próprias tarefas.
         </p>
       </div>
 
-      <KanbanBoard tarefas={tarefas || []} isAdmin={false} />
+      <UserTarefasClient tarefas={tarefas || []} userId={user.id} />
     </div>
   )
 }
