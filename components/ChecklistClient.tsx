@@ -326,7 +326,7 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         
         .n-pill { background: rgba(79, 124, 255, 0.08); border: 1px solid rgba(79, 124, 255, 0.15); padding: 5px 12px; border-radius: 10px; color: #4f7cff; font-weight: 900; font-size: 13px; }
         .bold { font-weight: 800; color: #eee; } .blue-txt { color: #4f7cff; font-weight: 700; font-size: 11px; } 
-        .dim { color: #777; font-size: 11px; line-height: 1.6; max-width: 450px; text-transform: none; }
+        .dim { color: #777; font-size: 11px; line-height: 1.6; max-width: 450px; text-transform: none; word-break: break-all; }
         
         .inp-v8 { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px; color: #fff; width: 100%; outline: none; font-size: 13px; transition: all 0.2s; }
         .inp-v8:focus { border-color: #4f7cff; background: rgba(79, 124, 255, 0.04); box-shadow: 0 0 15px rgba(79, 124, 255, 0.1); }
