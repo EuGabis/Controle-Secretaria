@@ -24,25 +24,29 @@ export default async function FollowUpPage(props: Props) {
   if (profile?.perfil === 'master') {
     // Master vê todos os colaboradores possíveis para filtrar
   } else {
-    queryUsr = queryUsr.eq('admin_id', user.id)
+    // Admin vê si mesmo e seus subordinados
+    queryUsr = queryUsr.or(`id.eq.${user.id},admin_id.eq.${user.id}`)
   }
   const { data: usuarios } = await queryUsr
+  const userIds = (usuarios || []).map(u => u.id)
 
   const hoje = new Date().toISOString().slice(0, 10)
 
   // Query base do Follow Up
   let query = supabase
     .from('follow_up_log')
-    .select('*, tarefa:tarefas!inner(titulo, criado_por), usuario:usuarios!inner(nome)')
+    .select('*, tarefa:tarefas!inner(titulo), usuario:usuarios!inner(nome)')
     .gte('alterado_em', `${hoje}T00:00:00`)
     .order('alterado_em', { ascending: false })
 
   if (profile?.perfil === 'master') {
     // Master vê todos os logs de hoje sem filtro adicional
   } else {
-    // Admin vê apenas logs de tarefas que ele criou
-    query = query.eq('tarefa.criado_por', user.id)
+    // Admin vê logs de si mesmo e de seus subordinados (quem moveu a tarefa)
+    const listStr = userIds.length > 0 ? userIds.join(',') : user.id
+    query = query.filter('usuario_id', 'in', `(${listStr})`)
   }
+
 
   if (usuarioFiltro) {
     query = query.eq('usuario_id', usuarioFiltro)
