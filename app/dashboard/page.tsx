@@ -29,12 +29,16 @@ export default async function DashboardPage() {
     let queryT = supabase.from('tarefas').select('*, usuario:usuarios!usuario_id(*)')
     
     if (profile.perfil === 'master') {
-      queryT = queryT.in('usuario_id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'])
+      // Master vê TUDO (userIds já contém todos se for master)
+      // Mas para garantir que pegamos até tarefas com usuario_id nulo se existirem:
+      queryT = queryT.order('data_limite', { ascending: true })
     } else {
-      // Admin vê tarefas que criou (para outros) OU que foram atribuídas a ele (pelo Master)
-      queryT = queryT.or(`criado_por.eq.${user.id},usuario_id.eq.${user.id}`)
+      // Admin vê tarefas atribuídas a ele ou aos seus subordinados (userIds já inclui o Admin)
+      const listStr = userIds.length > 0 ? userIds.join(',') : user.id
+      queryT = queryT.or(`usuario_id.in.(${listStr}),criado_por.eq.${user.id}`).order('data_limite', { ascending: true })
     }
     const { data: tarefas } = await queryT
+
 
     return <AdminDashboard usuarios={usuarios || []} tarefas={tarefas || []} currentUserId={user.id} />
   }
