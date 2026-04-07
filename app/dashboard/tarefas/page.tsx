@@ -26,9 +26,11 @@ export default async function AdminTarefasPage() {
   if (profile?.perfil === 'master') {
     // Master vê todas as tarefas do sistema
   } else {
-    // Admin vê tarefas que criou OU que foram atribuídas a ele
-    queryT = queryT.or(`criado_por.eq.${user.id},usuario_id.eq.${user.id}`)
+    // Admin vê tarefas atribuídas a ele ou aos seus subordinados (userIds já inclui o Admin)
+    const listStr = userIds.length > 0 ? userIds.join(',') : user.id
+    queryT = queryT.or(`usuario_id.in.(${listStr}),criado_por.eq.${user.id}`)
   }
+
   
   const { data: tarefas } = await queryT
 

@@ -221,10 +221,21 @@ export default function AdminTarefasClient({ usuarios, tarefas: initialTarefas, 
         isAdmin={true} 
         onEdit={handleEdit} 
         onUpdate={async () => {
-          // Recarrega as tarefas do banco para garantir sincronia total em todos os filtros
-          const { data } = await supabase.from('tarefas').select('*, usuario:usuarios!usuario_id(*)').order('created_at', { ascending: false })
+          // Recarrega as tarefas do banco com os mesmos critérios de visibilidade
+          let q = supabase.from('tarefas').select('*, usuario:usuarios!usuario_id(*)').order('created_at', { ascending: false })
+          
+          // Se não for master (não implementamos isMaster aqui mas podemos inferir), aplicamos o filtro admin
+          // Para simplificar, usamos a lista de usuários que o componente já recebeu como prop
+          const userIds = usuarios.map(u => u.id)
+          if (userIds.length > 0) {
+            // Se o admin tiver usuários subordinados, filtramos por eles + si mesmo + criações
+            q = q.or(`usuario_id.in.(${userIds.join(',')}),criado_por.eq.${adminId}`)
+          }
+          
+          const { data } = await q
           if (data) setTarefas(data)
         }}
+
       />
 
       {/* Modal */}
