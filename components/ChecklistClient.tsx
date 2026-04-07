@@ -23,10 +23,9 @@ interface Props {
 const GLOBAL_TURMA_ID = '00000000-0000-0000-0000-000000000000'
 
 export default function ChecklistClient({ itens: initialItens, turmas: initialTurmas, respostas: initialRespostas, perfil, usuarioId }: Props) {
-  const [itens, setItens] = useState(initialItens)
+  const [itens, setItens] = useState(initialItens) // Todos os itens de todas as turmas carregados
   const [respostas, setRespostas] = useState(initialRespostas)
-  const [customTitle, setCustomTitle] = useState('')
-  const [customSub, setCustomSub] = useState('')
+  const [expandedTurmaId, setExpandedTurmaId] = useState<string | null>(null) // Acordeão: tudo fechado por padrão
   const [saving, setSaving] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null)
   
@@ -34,24 +33,65 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
   const [importReplace, setImportReplace] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [isImporting, setIsImporting] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+
   
   const isAdmin = perfil === 'admin' || perfil === 'master'
   const supabase = createClient()
 
-  useEffect(() => {
-    const globalTurma = initialTurmas.find(t => t.id === GLOBAL_TURMA_ID)
-    if (globalTurma) {
-      setCustomTitle(globalTurma.nome || 'CHECKLIST DE IMERSÃO - PADRÃO')
-      // @ts-ignore
-      setCustomSub(globalTurma.descricao || 'GESTÃO DE PROCESSOS E IMERSÕES - LITO ACADEMY')
+  // --- LÓGICA DE INSTÂNCIAS ---
+  const handleCreateTurma = async () => {
+    const nome = prompt('NOME DO NOVO CHECKLIST / TURMA:')
+    if (!nome) return
+    
+    setIsCreating(true)
+    try {
+      // 1. Criar a nova Turma
+      const { data: newTurma, error: tErr } = await supabase.from('checklist_turmas').insert({
+        nome: nome.toUpperCase(),
+        ativa: true
+      }).select().single()
+
+      if (tErr || !newTurma) throw tErr
+
+      // 2. Clonar Itens do Modelo Padrão (GLOBAL_TURMA_ID)
+      const templateItens = itens.filter(i => (i as any).turma_id === GLOBAL_TURMA_ID)
+      const clonedItens = templateItens.map(i => ({
+        item_n: i.item_n,
+        titulo: i.titulo,
+        contexto: i.contexto,
+        responsavel: i.responsavel,
+        descricao: i.descricao,
+        tipo_campo: i.tipo_campo,
+        ordem: i.ordem,
+        turma_id: newTurma.id // Associa à nova turma
+      }))
+
+      const { data: insertedItens, error: iErr } = await supabase.from('checklist_itens').insert(clonedItens).select()
+      
+      if (iErr) throw iErr
+
+      // 3. Atualizar Estado Local
+      if (insertedItens) setItens(prev => [...prev, ...insertedItens])
+      // Forçar atualização da página para carregar a nova turma na lista se necessário, 
+      // ou apenas atualizar o estado turmas se tivéssemos ele em um state. 
+      // Como initialTurmas vem por prop, o ideal é usar router.refresh() ou recarregar.
+      window.location.reload() 
+    } catch (err) {
+      console.error(err)
+      alert('Erro ao criar checklist')
+    } finally {
+      setIsCreating(false)
     }
-  }, [initialTurmas])
+  }
+
 
   const turmaRespostasMap = useMemo(() => {
     const map: Record<string, ChecklistResposta> = {}
-    respostas.forEach(r => { map[r.item_id] = r })
+    respostas.forEach(r => { map[`${r.item_id}-${r.turma_id}`] = r })
     return map
   }, [respostas])
+
 
   const renderFormattedText = (text: string | null) => {
     if (!text) return '-'
@@ -71,32 +111,46 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
   }
 
   // --- PERSISTÊNCIA ---
-  const saveHeader = async (field: 'nome' | 'descricao', value: string) => {
-    setSaving('header'); 
-    const update: any = { id: GLOBAL_TURMA_ID }; 
+  const saveHeader = async (turmaId: string, field: 'nome' | 'descricao', value: string) => {
+    setSaving(`header-${turmaId}`); 
+    const update: any = { id: turmaId }; 
     update[field] = value.toUpperCase()
     await supabase.from('checklist_turmas').upsert(update, { onConflict: 'id' })
     setTimeout(() => setSaving(null), 500)
   }
 
-  const performSave = async (itemId: string, updates: Partial<ChecklistResposta>) => {
+  const performSave = async (itemId: string, turmaId: string, updates: Partial<ChecklistResposta>) => {
     setSaving(`cell-${itemId}`)
     const { data } = await supabase.from('checklist_respostas').upsert({
-        item_id: itemId, turma_id: GLOBAL_TURMA_ID, ...updates,
+        item_id: itemId, turma_id: turmaId, ...updates,
         respondido_por: usuarioId, updated_at: new Date().toISOString()
     }, { onConflict: 'item_id,turma_id' }).select().single()
-    if (data) setRespostas(prev => prev.map(r => (r.item_id === itemId) ? data : r))
+    
+    if (data) {
+      setRespostas(prev => {
+        const index = prev.findIndex(r => r.item_id === itemId && r.turma_id === turmaId)
+        if (index >= 0) {
+          const newRes = [...prev]
+          newRes[index] = data
+          return newRes
+        }
+        return [...prev, data]
+      })
+    }
     setTimeout(() => setSaving(null), 300)
   }
 
-  const exportToExcel = () => {
+
+  const exportToExcel = (turmaId: string, turmaNome: string) => {
+    const turmaItens = itens.filter(i => (i as any).turma_id === turmaId)
     const html = `<html><head><meta charset="UTF-8"></head><body><table>
-      <tr><th colspan="7">${customTitle}</th></tr>
-      ${itens.map(i => `<tr><td>${i.item_n}</td><td>${i.contexto}</td><td>${i.responsavel}</td><td>${i.titulo}</td><td>${i.descricao}</td><td>${turmaRespostasMap[i.id]?.valor_data || ''}</td><td>${turmaRespostasMap[i.id]?.valor_texto || ''}</td></tr>`).join('')}
+      <tr><th colspan="7">${turmaNome}</th></tr>
+      ${turmaItens.map(i => `<tr><td>${i.item_n}</td><td>${i.contexto}</td><td>${i.responsavel}</td><td>${i.titulo}</td><td>${i.descricao}</td><td>${turmaRespostasMap[`${i.id}-${turmaId}`]?.valor_data || ''}</td><td>${turmaRespostasMap[`${i.id}-${turmaId}`]?.valor_texto || ''}</td></tr>`).join('')}
     </table></body></html>`
     const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
-    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${customTitle}.xls`; link.click()
+    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${turmaNome}.xls`; link.click()
   }
+
 
   const processImport = async () => {
     if (!importFile) return
@@ -115,100 +169,167 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
 
   return (
     <div className="checklist-v9">
-      {/* HEADER */}
-      <div className="h-v8 glass">
-        <div className="h-v8-left">
-           <div className="h-v8-badge"><DatabaseZap size={22} /></div>
-           <div className="h-v8-info">
-              <input className="h-v8-title" value={customTitle} onChange={e => setCustomTitle(e.target.value)} onBlur={e => saveHeader('nome', e.target.value)} />
-              <input className="h-v8-sub" value={customSub} onChange={e => setCustomSub(e.target.value)} onBlur={e => saveHeader('descricao', e.target.value)} />
-           </div>
+      {/* HEADER PRINCIPAL */}
+      <div className="main-header glass">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div className="h-v8-badge"><DatabaseZap size={22} /></div>
+          <div>
+            <h1 className="text-gradient" style={{ fontSize: '24px', fontWeight: '900', margin: 0 }}>SISTEMA DE CHECKLISTS</h1>
+            <p style={{ fontSize: '10px', color: '#555', fontWeight: '700', letterSpacing: '0.1em' }}>GESTÃO INDEPENDENTE DE PROCESSOS</p>
+          </div>
         </div>
-        <div className="h-v8-right" style={{ display: 'flex', gap: '10px' }}>
-           {isAdmin && <button className="btn-v8 silver" onClick={() => setIsImportModalOpen(true)}><FileUp size={16}/> IMPORTAR</button>}
-           <button className="btn-v8 primary" onClick={exportToExcel}><FileSpreadsheet size={16}/> EXPORTAR EXCEL</button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {isAdmin && (
+            <button className="btn-v8 primary-gradient" onClick={handleCreateTurma} disabled={isCreating}>
+              {isCreating ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
+              NOVO CHECKLIST
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="list-v8 glass animation-fade">
-         <table className="t-v8">
-            <thead>
-              <tr>
-                 <th>#</th>
-                 <th>PRAZO</th>
-                 <th>RESPONSÁVEL</th>
-                 <th>ETAPA DO PROCESSO</th>
-                 <th>DESCRIÇÃO / LINKS</th>
-                 <th>DATA</th>
-                 <th>SITUAÇÃO</th>
-              </tr>
-            </thead>
-            <tbody>
-               {itens.sort((a,b) => (a.item_n ?? 0) - (b.item_n ?? 0)).map(item => {
-                  const resp = turmaRespostasMap[item.id]
-                  return (
-                     <tr key={item.id}>
-                        <td className="center"><span className="n-pill">{item.item_n}</span></td>
-                        <td className="bold">{item.contexto}</td>
-                        <td className="blue-txt">{item.responsavel}</td>
-                        <td className="bold">
-                           <div className="row-between" style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap: '8px'}}>
-                              {item.titulo}
-                              <div style={{ display: 'flex', gap: '4px' }}>
-                                {isAdmin && (
-                                  <>
-                                    <button className="edit-btn" onClick={() => setEditingItem(item)} style={{background:'none', border:'none', color:'#4f7cff', cursor:'pointer', opacity:0.6}}><Edit3 size={14}/></button>
-                                    <button className="del-btn" onClick={async () => {
-                                      if (confirm(`DESEJA REALMENTE EXCLUIR A ETAPA #${item.item_n}?`)) {
-                                        await supabase.from('checklist_itens').delete().eq('id', item.id)
-                                        setItens(prev => prev.filter(i => i.id !== item.id))
-                                      }
-                                    }} style={{background:'none', border:'none', color:'#ff4d6a', cursor:'pointer', opacity:0.6}}><Trash2 size={14}/></button>
-                                  </>
-                                )}
-                              </div>
-                           </div>
-                        </td>
-                        <td className="dim">{renderFormattedText(item.descricao)}</td>
-                        <td><input type="date" className="inp-v8" value={resp?.valor_data || ''} onChange={e => performSave(item.id, { valor_data: e.target.value })} /></td>
-                        <td>
-                           <div className="p-rel">
-                              <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '5px' }}>
-                                <input className="inp-v8 status-inp" value={resp?.valor_texto || ''} onChange={e => performSave(item.id, { valor_texto: e.target.value.toUpperCase() })} />
-                                {resp?.valor_texto && resp.valor_texto.match(/(https?:\/\/[^\s]+|www\.[^\s]+)/g) && (
-                                  <a href={resp.valor_texto.startsWith('http') ? resp.valor_texto : `https://${resp.valor_texto}`} target="_blank" rel="noreferrer" style={{ color: '#4f7cff' }}>
-                                    <ExternalLink size={14} />
-                                  </a>
-                                )}
-                              </div>
-                              {saving === `cell-${item.id}` && <div className="loader-mini"><Loader2 size={10} className="spin"/></div>}
-                           </div>
-                        </td>
-                     </tr>
-                  )
-               })}
-            </tbody>
-         </table>
+      <div className="checklist-container">
+        {initialTurmas.map(turma => {
+          const isExpanded = expandedTurmaId === turma.id
+          const turmaItens = itens.filter(i => (i as any).turma_id === turma.id)
+          const isPadrão = turma.id === GLOBAL_TURMA_ID
 
-         {isAdmin && (
-           <div className="footer-v8">
-             <button className="add-v8" onClick={async () => {
-                const maxN = Math.max(0, ...itens.map(i => i.item_n ?? 0))
-                const { data } = await supabase.from('checklist_itens').insert({
-                  item_n: maxN + 1,
-                  titulo: 'NOVA ETAPA',
-                  contexto: 'D-X',
-                  responsavel: 'ADM',
-                  ordem: maxN + 1,
-                  tipo_campo: 'check'
-                }).select().single()
-                if (data) setItens(prev => [...prev, data].sort((a,b) => a.item_n - b.item_n))
-             }}>
-                <Plus size={18} /> ADICIONAR NOVA ETAPA NO FINAL
-             </button>
-           </div>
-         )}
+          return (
+            <div key={turma.id} className={`checklist-instance ${isExpanded ? 'expanded' : ''}`}>
+              {/* ACCORDION HEADER */}
+              <div className="instance-header glass" onClick={() => setExpandedTurmaId(isExpanded ? null : turma.id)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div className={`status-dot ${isPadrão ? 'gold' : 'blue'}`} />
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                       <span className="turma-name">{turma.nome}</span>
+                       {isPadrão && <span className="master-badge">MODÊLO MASTER</span>}
+                    </div>
+                    <span className="turma-meta">{turmaItens.length} ETAPAS CONFIGURADAS</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  {saving === `header-${turma.id}` && <Loader2 size={14} className="spin" style={{color: '#4f7cff'}}/>}
+                  <Edit3 size={18} className="icon-expand" />
+                </div>
+              </div>
+
+              {/* ACCORDION CONTENT */}
+              {isExpanded && (
+                <div className="instance-content scale-in">
+                  <div className="content-inner glass">
+                    <div className="table-header">
+                       <input 
+                         className="h-v8-title" 
+                         defaultValue={turma.nome} 
+                         onBlur={e => saveHeader(turma.id, 'nome', e.target.value)} 
+                         placeholder="NOME DO CHECKLIST"
+                       />
+                       <div style={{ display: 'flex', gap: '10px' }}>
+                          <button className="btn-v8 primary" onClick={() => exportToExcel(turma.id, turma.nome)}><FileSpreadsheet size={16}/> EXPORTAR</button>
+                       </div>
+
+                    </div>
+
+                    <div className="table-wrapper">
+                      <table className="t-v8">
+                        <thead>
+                          <tr>
+                             <th>#</th>
+                             <th>PRAZO</th>
+                             <th>RESPONSÁVEL</th>
+                             <th>ETAPA DO PROCESSO</th>
+                             <th>DESCRIÇÃO / LINKS</th>
+                             <th>DATA</th>
+                             <th>SITUAÇÃO</th>
+                          </tr>
+                        </thead>
+                         <tbody>
+                          {turmaItens.sort((a,b) => (a.item_n ?? 0) - (b.item_n ?? 0)).map(item => {
+                            const resp = turmaRespostasMap[`${item.id}-${turma.id}`]
+                            return (
+
+                              <tr key={item.id}>
+                                <td className="center"><span className="n-pill">{item.item_n}</span></td>
+                                <td className="bold">{item.contexto}</td>
+                                <td className="blue-txt">{item.responsavel}</td>
+                                <td className="bold">
+                                   <div className="row-between" style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap: '8px'}}>
+                                      {item.titulo}
+                                      {isAdmin && (
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                          <button className="edit-btn" onClick={(e) => { e.stopPropagation(); setEditingItem(item); }}><Edit3 size={14}/></button>
+                                          <button className="del-btn" onClick={async (e) => {
+                                            e.stopPropagation();
+                                            if (confirm(`DESEJA EXCLUIR A ETAPA #${item.item_n}?`)) {
+                                              await supabase.from('checklist_itens').delete().eq('id', item.id)
+                                              setItens(prev => prev.filter(i => i.id !== item.id))
+                                            }
+                                          }}><Trash2 size={14}/></button>
+                                        </div>
+                                      )}
+                                   </div>
+                                </td>
+                                <td className="dim">{renderFormattedText(item.descricao)}</td>
+                                <td>
+                                  <input 
+                                    type="date" 
+                                    className="inp-v8" 
+                                    value={resp?.valor_data || ''} 
+                                    onChange={e => performSave(item.id, turma.id, { valor_data: e.target.value })} 
+                                  />
+                                </td>
+                                <td>
+                                   <div className="p-rel">
+                                      <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '5px' }}>
+                                        <input 
+                                          className="inp-v8 status-inp" 
+                                          value={resp?.valor_texto || ''} 
+                                          onChange={e => performSave(item.id, turma.id, { valor_texto: e.target.value.toUpperCase() })} 
+                                        />
+                                        {resp?.valor_texto && resp.valor_texto.match(/(https?:\/\/[^\s]+|www\.[^\s]+)/g) && (
+                                          <a href={resp.valor_texto.startsWith('http') ? resp.valor_texto : `https://${resp.valor_texto}`} target="_blank" rel="noreferrer" style={{ color: '#4f7cff' }}>
+                                            <ExternalLink size={14} />
+                                          </a>
+                                        )}
+                                      </div>
+                                      {saving === `cell-${item.id}` && <div className="loader-mini"><Loader2 size={10} className="spin"/></div>}
+                                   </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {isAdmin && (
+                      <div className="footer-v8">
+                        <button className="add-v8" onClick={async () => {
+                           const maxN = Math.max(0, ...turmaItens.map(i => i.item_n ?? 0))
+                           const { data } = await supabase.from('checklist_itens').insert({
+                             item_n: maxN + 1,
+                             titulo: 'NOVA ETAPA',
+                             contexto: 'D-X',
+                             responsavel: 'ADM',
+                             ordem: maxN + 1,
+                             tipo_campo: 'check',
+                             turma_id: turma.id
+                           }).select().single()
+                           if (data) setItens(prev => [...prev, data])
+                        }}>
+                           <Plus size={18} /> ADICIONAR NOVA ETAPA
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
+
 
       {/* MODAL EDIÇÃO COMPLETA */}
       {editingItem && (
@@ -311,62 +432,65 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
       )}
 
       <style jsx>{`
-        .checklist-v9 { display: flex; flex-direction: column; gap: 24px; color: #fff; text-transform: uppercase; padding-bottom: 80px; font-family: 'Inter', sans-serif; }
-        .glass { background: rgba(10, 10, 18, 0.96); backdrop-filter: blur(25px); border: 1px solid rgba(255,255,255,0.06); border-radius: 24px; box-shadow: 0 30px 60px rgba(0,0,0,0.6); }
+        .checklist-v9 { display: flex; flex-direction: column; gap: 20px; color: #fff; text-transform: uppercase; padding-bottom: 80px; font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(10, 10, 18, 0.96); backdrop-filter: blur(25px); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; }
         
-        .h-v8 { padding: 25px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); }
-        .h-v8-left { display: flex; align-items: center; gap: 20px; }
-        .h-v8-badge { width: 48px; height: 48px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px rgba(79, 124, 255, 0.3); }
-        .h-v8-title { background: transparent; border: none; font-size: 20px; font-weight: 900; color: #fff; width: 450px; outline: none; text-transform: uppercase; letter-spacing: -0.01em; }
-        .h-v8-sub { background: transparent; border: none; font-size: 10px; color: #555; font-weight: 700; width: 100%; outline: none; margin-top: 4px; letter-spacing: 0.1em; }
+        .main-header { padding: 30px; display: flex; justify-content: space-between; align-items: center; }
+        .checklist-container { display: flex; flex-direction: column; gap: 15px; }
 
-        .t-v8 { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1500px; }
-        .t-v8 th { background: #080811; padding: 18px 16px; font-size: 9px; color: #444; font-weight: 900; text-align: left; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #1a1a24; letter-spacing: 0.1em; }
-        .t-v8 td { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 12px; vertical-align: middle; }
-        
-        .n-pill { background: rgba(79, 124, 255, 0.08); border: 1px solid rgba(79, 124, 255, 0.15); padding: 5px 12px; border-radius: 10px; color: #4f7cff; font-weight: 900; font-size: 13px; }
-        .bold { font-weight: 800; color: #eee; } .blue-txt { color: #4f7cff; font-weight: 700; font-size: 11px; } 
-        .dim { color: #777; font-size: 11px; line-height: 1.6; max-width: 450px; text-transform: none; word-break: normal; overflow-wrap: anywhere; }
-        
-        .inp-v8 { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px; color: #fff; width: 100%; outline: none; font-size: 13px; transition: all 0.2s; }
-        .inp-v8:focus { border-color: #4f7cff; background: rgba(79, 124, 255, 0.04); box-shadow: 0 0 15px rgba(79, 124, 255, 0.1); }
-        .status-inp { color: #10d98c; font-weight: 800; border-color: rgba(16,217,140,0.1); text-transform: uppercase; }
-        .p-rel { position: relative; width: 220px; }
-        .loader-mini { position: absolute; top: -8px; right: -8px; background: #4f7cff; border-radius: 50%; padding: 4px; box-shadow: 0 0 15px rgba(79, 124, 255, 0.4); }
+        .instance-header { padding: 25px 30px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.3s; }
+        .instance-header:hover { background: rgba(255,255,255,0.02); }
+        .instance-header .turma-name { font-size: 18px; font-weight: 900; color: #fff; letter-spacing: -0.02em; }
+        .instance-header .turma-meta { font-size: 10px; color: #555; font-weight: 700; display: block; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
+        .status-dot.gold { background: #ffcc00; color: #ffcc00; }
+        .status-dot.blue { background: #4f7cff; color: #4f7cff; }
+        .master-badge { background: rgba(255,204,0,0.1); color: #ffcc00; font-size: 9px; padding: 2px 8px; border-radius: 6px; font-weight: 900; margin-left: 8px; }
 
-        .btn-v8 { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 14px; font-size: 11px; font-weight: 800; cursor: pointer; border: none; transition: 0.3s; }
+        .instance-content { margin-top: -10px; }
+        .content-inner { padding: 0; background: rgba(0,0,0,0.2); border-radius: 0 0 20px 20px; overflow: hidden; }
+        
+        .table-header { padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); background: rgba(0,0,0,0.3); }
+        .table-wrapper { overflow-x: auto; width: 100%; }
+
+        .h-v8-badge { width: 44px; height: 44px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+        .h-v8-title { background: transparent; border: none; font-size: 18px; font-weight: 900; color: #fff; width: 300px; outline: none; text-transform: uppercase; }
+
+        .t-v8 { width: 100%; border-collapse: collapse; min-width: 1200px; }
+        .t-v8 th { background: rgba(0,0,0,0.5); padding: 15px; font-size: 9px; color: #444; font-weight: 900; text-align: left; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #1a1a24; }
+        .t-v8 td { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02); font-size: 12px; }
+        
+        .n-pill { background: rgba(255,255,255,0.03); padding: 4px 10px; border-radius: 8px; color: #666; font-weight: 900; }
+        .bold { font-weight: 800; color: #eee; } 
+        .blue-txt { color: #4f7cff; font-weight: 700; font-size: 11px; } 
+        .dim { color: #666; font-size: 11px; max-width: 400px; text-transform: none; line-height: 1.5; }
+        
+        .inp-v8 { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; padding: 10px; color: #fff; width: 100%; outline: none; font-size: 12px; transition: 0.2s; }
+        .inp-v8:focus { border-color: #4f7cff; background: rgba(79, 124, 255, 0.04); }
+        .status-inp { color: #10d98c; font-weight: 800; }
+        .p-rel { position: relative; width: 180px; }
+        .loader-mini { position: absolute; top: -5px; right: -5px; background: #4f7cff; border-radius: 50%; padding: 3px; }
+
+        .btn-v8 { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 12px; font-size: 10px; font-weight: 800; cursor: pointer; border: none; transition: 0.2s; }
         .btn-v8.primary { background: #4f7cff; color: #fff; }
         .primary-gradient { background: linear-gradient(135deg, #4f7cff, #8b5cf6); color: #fff; }
-        .btn-v8.silver { background: rgba(255,255,255,0.04); color: #888; border: 1px solid rgba(255,255,255,0.06); }
-        .btn-v8:hover { transform: translateY(-1px); filter: brightness(1.1); }
-
-        .footer-v8 { padding: 50px; display: flex; justify-content: center; }
-        .add-v8 { background: transparent; border: 1.5px dashed rgba(255,255,255,0.1); color: #444; padding: 25px 60px; border-radius: 24px; font-weight: 900; cursor: pointer; transition: 0.3s; display: flex; align-items: center; gap: 12px; font-size: 13px; }
-        .add-v8:hover { border-color: #4f7cff; color: #4f7cff; background: rgba(79, 124, 255, 0.03); border-style: solid; }
         
-        .overlay-v8 { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-        .modal-v8 { width: 100%; max-width: 680px; box-shadow: 0 50px 100px rgba(0,0,0,0.8); } 
-        .m-h { padding: 25px 30px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; } 
-        .m-b { padding: 30px; display: flex; flex-direction: column; gap: 20px; } 
-        .m-f { padding: 20px 30px; background: rgba(0,0,0,0.2); border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: flex-end; border-radius: 0 0 24px 24px; }
-        
-        .modal-grid-top { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 15px; }
-        .modal-icon-header { width: 36px; height: 36px; background: rgba(79, 124, 255, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #4f7cff; }
-        .f-group { display: flex; flex-direction: column; gap: 8px; }
-        .f-group label { font-size: 9px; font-weight: 900; color: #444; letter-spacing: 0.08em; }
-        .main-title-inp { font-size: 15px; font-weight: 800; border-color: rgba(79, 124, 255, 0.2); }
-        .desc-area { text-transform: none; line-height: 1.5; font-size: 12px; color: #bbb; }
-        .close-x { background: rgba(255,255,255,0.03); border: none; color: #555; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; display: flex; }
-        .close-x:hover { background: rgba(255,77,106,0.1); color: #ff4d6a; transform: rotate(90deg); }
-        .check-label { display: flex; align-items: center; gap: 10px; font-size: 11px; cursor: pointer; margin-top: 5px; font-weight: 800; color: #ff4d6a; opacity: 0.7; }
-        .check-label:hover { opacity: 1; }
+        .footer-v8 { padding: 30px; display: flex; justify-content: center; }
+        .add-v8 { background: transparent; border: 1.5px dashed rgba(255,255,255,0.05); color: #444; padding: 15px 40px; border-radius: 18px; font-weight: 900; cursor: pointer; transition: 0.2s; }
+        .add-v8:hover { border-color: #4f7cff; color: #4f7cff; }
 
-        .scale-in { animation: scaleIn 0.3s cubic-bezier(0.2, 1, 0.3, 1); }
-        .animation-fade { animation: fadeIn 0.6s ease; }
+        .edit-btn, .del-btn { background: none; border: none; opacity: 0.3; cursor: pointer; transition: 0.2s; padding: 6px; }
+        .edit-btn:hover { opacity: 1; color: #4f7cff; }
+        .del-btn:hover { opacity: 1; color: #ff4d6a; }
+
+        .icon-expand { color: #333; transition: 0.3s; }
+        .checklist-instance.expanded .icon-expand { transform: rotate(180deg); color: #4f7cff; }
+        
+        .scale-in { animation: scaleIn 0.3s ease-out; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes scaleIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
       `}</style>
     </div>
   )
