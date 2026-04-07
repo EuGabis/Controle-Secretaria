@@ -108,8 +108,12 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
 
   const performSave = async (itemId: string, turmaId: string, updates: Partial<ChecklistResposta>) => {
     setSaving(`cell-${itemId}`)
+    
+    // Se estiver preenchendo valor_texto, marcamos status como OK para o contador
+    const status = (updates.valor_texto && updates.valor_texto.trim().length > 0) ? 'OK' : 'PENDENTE'
+    
     const { data } = await supabase.from('checklist_respostas').upsert({
-        item_id: itemId, turma_id: turmaId, ...updates,
+        item_id: itemId, turma_id: turmaId, ...updates, status,
         respondido_por: usuarioId, updated_at: new Date().toISOString()
     }, { onConflict: 'item_id,turma_id' }).select().single()
     
@@ -126,6 +130,7 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
     }
     setTimeout(() => setSaving(null), 300)
   }
+
 
   const exportToExcel = (turmaId: string, turmaNome: string) => {
     const turmaItens = itens.filter(i => (i as any).turma_id === turmaId)
@@ -200,18 +205,35 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                  <button className="btn-v8 primary-gradient big-btn" onClick={async () => {
                     setSaving('modal-save')
                     try {
-                      const { data, error } = await supabase.from('checklist_itens').update({
+                      const isMaster = (editingItem as any).turma_id === GLOBAL_TURMA_ID
+                      const updates = {
                         item_n: editingItem.item_n,
                         titulo: editingItem.titulo,
                         contexto: editingItem.contexto,
                         responsavel: editingItem.responsavel,
                         descricao: editingItem.descricao,
                         ordem: editingItem.item_n
-                      }).eq('id', editingItem.id).select().single()
+                      }
 
+                      // 1. Salvar o item atual
+                      const { data, error } = await supabase.from('checklist_itens').update(updates).eq('id', editingItem.id).select().single()
                       if (error) throw error
+
+                      // 2. Se for MASTER, propagar edição para itens com mesmo item_n em outras turmas? 
+                      // O usuário pediu especificamente para CRIAÇÃO, mas é bom propagar EDIÇÃO de títulos/descrições se for master.
+                      if (isMaster && data) {
+                        await supabase.from('checklist_itens').update({
+                           titulo: data.titulo,
+                           contexto: data.contexto,
+                           responsavel: data.responsavel,
+                           descricao: data.descricao
+                        }).eq('item_n', data.item_n).neq('turma_id', GLOBAL_TURMA_ID)
+                      }
+
                       if (data) {
-                         setItens(prev => prev.map(i => i.id === data.id ? data : i))
+                         // Recarregar tudo para garantir consistência após propagação em massa
+                         const { data: allItens } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
+                         if (allItens) setItens(allItens)
                          setEditingItem(null)
                       }
                     } catch (err: any) { alert('ERRO: ' + err.message) }
@@ -220,6 +242,7 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                     {saving === 'modal-save' ? <><Loader2 size={18} className="spin"/> SALVANDO...</> : <><Save size={18}/> SALVAR ALTERAÇÕES</>}
                  </button>
               </div>
+
            </div>
         </div>
       )}
@@ -343,14 +366,40 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                     {isAdmin && (
                       <div className="footer-v8">
                         <button className="add-v8" onClick={async () => {
+                           setSaving(`add-${turma.id}`)
                            const maxN = Math.max(0, ...turmaItens.map(i => i.item_n ?? 0))
-                           const { data } = await supabase.from('checklist_itens').insert({
+                           const newItemData = {
                              item_n: maxN + 1, titulo: 'NOVA ETAPA', contexto: 'D-X', responsavel: 'ADM', ordem: maxN + 1, tipo_campo: 'check', turma_id: turma.id
-                           }).select().single()
-                           if (data) setItens(prev => [...prev, data])
-                        }}><Plus size={18} /> ADICIONAR ETAPA</button>
+                           }
+
+                           // 1. Criar o item principal
+                           const { data: masterItem, error } = await supabase.from('checklist_itens').insert(newItemData).select().single()
+                           
+                           if (error) { alert('ERRO: ' + error.message); setSaving(null); return; }
+
+                           // 2. Se for o MASTER, propagar para TODAS as outras turmas existentes
+                           if (turma.id === GLOBAL_TURMA_ID && masterItem) {
+                             const otherTurmas = initialTurmas.filter(t => t.id !== GLOBAL_TURMA_ID)
+                             const propagationItens = otherTurmas.map(t => ({
+                               ...newItemData,
+                               turma_id: t.id
+                             }))
+                             if (propagationItens.length > 0) {
+                               await supabase.from('checklist_itens').insert(propagationItens)
+                             }
+                           }
+
+                           // 3. Recarregar estado
+                           const { data: allItens } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
+                           if (allItens) setItens(allItens)
+                           setSaving(null)
+                        }}>
+                           {saving === `add-${turma.id}` ? <Loader2 size={18} className="spin"/> : <Plus size={18} />} 
+                           {turma.id === GLOBAL_TURMA_ID ? 'ADICIONAR ETAPA (PROPAGAR PARA TODOS)' : 'ADICIONAR ETAPA LOCAL'}
+                        </button>
                       </div>
                     )}
+
                   </div>
                 </div>
               )}
