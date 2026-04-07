@@ -168,9 +168,16 @@ export default function UserTarefasClient({ tarefas: initialTarefas, userId }: P
         isAdmin={false} 
         onEdit={handleEdit} 
         onUpdate={async () => {
-           // Recarrega se necessário
+           // Sincroniza o estado principal com o banco após movimentos no Kanban
+           const { data } = await supabase
+             .from('tarefas')
+             .select('*')
+             .eq('usuario_id', userId)
+             .order('data_limite', { ascending: true })
+           if (data) setTarefas(data)
         }}
       />
+
 
       {/* Modal de Criação / Edição */}
       {showModal && (
