@@ -169,83 +169,82 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
 
   return (
     <div className="checklist-v9">
-      {/* MODAL EDIÇÃO COMPLETA - MOVIDO PARA O TOPO PARA EVITAR CONFLITOS DE LAYOUT */}
+      {/* MODAL EDIÇÃO COMPLETA - ULTRA PREMIUM DESIGN */}
       {editingItem && (
         <div className="overlay-v8" onClick={() => setEditingItem(null)}>
-           <div className="modal-v8 glass scale-in" onClick={e => e.stopPropagation()}>
+           <div className="modal-v8 premium-glam scale-in" onClick={e => e.stopPropagation()}>
               <div className="m-h">
-                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div className="modal-icon-header"><Edit3 size={18}/></div>
+                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    <div className="modal-icon-header"><Edit3 size={20}/></div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                       <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '900' }}>EDITAR ETAPA DO PROCESSO</h3>
-                       <span style={{ fontSize: '10px', color: '#666', fontWeight: '700' }}>CONFIGURAÇÕES DA ETAPA #{editingItem.item_n}</span>
+                       <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#fff', letterSpacing: '-0.02em' }}>EDITOR DE ETAPAS</h3>
+                       <span style={{ fontSize: '10px', color: '#4f7cff', fontWeight: '900', letterSpacing: '0.1em' }}>CONFIGURAÇÕES INDEPENDENTES</span>
                     </div>
                  </div>
-                 <button onClick={() => setEditingItem(null)} className="close-x"><X size={20}/></button>
+                 <button onClick={() => setEditingItem(null)} className="close-x"><X size={22}/></button>
               </div>
+              
               <div className="m-b">
                  <div className="modal-grid-top">
                     <div className="f-group">
-                       <label>Nº #</label>
+                       <label>ETAPA Nº</label>
                        <input className="inp-v8" type="number" value={editingItem.item_n} onChange={e => setEditingItem({...editingItem, item_n: parseInt(e.target.value)})} />
                     </div>
                     <div className="f-group">
-                       <label>PRAZO / META</label>
+                       <label>PRAZO / TAG</label>
                        <input className="inp-v8" value={editingItem.contexto || ''} onChange={e => setEditingItem({...editingItem, contexto: e.target.value.toUpperCase()})} placeholder="EX: D-10" />
                     </div>
                     <div className="f-group">
                        <label>RESPONSÁVEL</label>
-                       <input className="inp-v8" value={editingItem.responsavel || ''} onChange={e => setEditingItem({...editingItem, responsavel: e.target.value.toUpperCase()})} placeholder="QUEM FAZ?" />
+                       <input className="inp-v8" value={editingItem.responsavel || ''} onChange={e => setEditingItem({...editingItem, responsavel: e.target.value.toUpperCase()})} placeholder="NOME DO RESPONSÁVEL" />
                     </div>
                  </div>
 
                  <div className="f-group">
-                    <label>TÍTULO DA ETAPA</label>
-                    <input className="inp-v8 main-title-inp" value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value.toUpperCase()})} placeholder="NOME DA TAREFA" />
+                    <label>TÍTULO DA ATIVIDADE</label>
+                    <input className="inp-v8 main-title-inp" value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value.toUpperCase()})} placeholder="DESCREVA A TAREFA" />
                  </div>
 
                  <div className="f-group">
-                    <label>DESCRIÇÃO E LINKS (GOOGLE DRIVE, ETC)</label>
-                    <textarea className="inp-v8 desc-area" rows={5} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} placeholder="DETALHE O PROCESSO OU COLE LINKS AQUI" />
+                    <label>DETALHAMENTO E LINKS (TEXTO LIVRE)</label>
+                    <textarea className="inp-v8 desc-area" rows={6} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} placeholder="COLE LINKS, INSTRUÇÕES OU OBSERVAÇÕES AQUI..." />
                  </div>
               </div>
+
               <div className="m-f">
-                 <button className="btn-v8 primary-gradient" onClick={async () => {
+                 <div style={{ marginRight: 'auto', fontSize: '10px', color: '#444', fontWeight: '800' }}>
+                    ID: {editingItem.id.split('-')[0]}...
+                 </div>
+                 <button className="btn-v8 primary-gradient big-btn" onClick={async () => {
                     setSaving('modal-save')
-                    const targetN = editingItem.item_n
-                    const oldItem = itens.find(i => i.id === editingItem.id)
-                    
-                    if (oldItem?.item_n !== targetN) {
-                       const toShift = itens.filter(i => (i as any).turma_id === (editingItem as any).turma_id && i.item_n >= targetN && i.id !== editingItem.id)
-                       if (toShift.length > 0) {
-                          const shiftUpdates = toShift.map(i => ({ ...i, item_n: (i.item_n || 0) + 1, ordem: (i.ordem || 0) + 1 }))
-                          await supabase.from('checklist_itens').upsert(shiftUpdates)
-                       }
-                    }
+                    try {
+                      const { data, error } = await supabase.from('checklist_itens').update({
+                        item_n: editingItem.item_n,
+                        titulo: editingItem.titulo,
+                        contexto: editingItem.contexto,
+                        responsavel: editingItem.responsavel,
+                        descricao: editingItem.descricao,
+                        ordem: editingItem.item_n
+                      }).eq('id', editingItem.id).select().single()
 
-                    const { data, error } = await supabase.from('checklist_itens').update({
-                      item_n: editingItem.item_n,
-                      titulo: editingItem.titulo,
-                      contexto: editingItem.contexto,
-                      responsavel: editingItem.responsavel,
-                      descricao: editingItem.descricao,
-                      ordem: editingItem.item_n
-                    }).eq('id', editingItem.id).select().single()
-
-                    if (!error && data) {
-                       setItens(prev => prev.map(i => i.id === data.id ? data : i))
-                       setEditingItem(null)
-                    } else if (error) {
-                      alert('ERRO AO SALVAR: ' + error.message)
+                      if (error) throw error
+                      if (data) {
+                         setItens(prev => prev.map(i => i.id === data.id ? data : i))
+                         setEditingItem(null)
+                      }
+                    } catch (err: any) {
+                      alert('ERRO AO SALVAR: ' + err.message)
+                    } finally {
+                      setSaving(null)
                     }
-                    setSaving(null)
                  }}>
-                    {saving === 'modal-save' ? <><Loader2 size={16} className="spin"/> PROCESSANDO...</> : <><Save size={16}/> SALVAR ALTERAÇÕES</>}
+                    {saving === 'modal-save' ? <><Loader2 size={18} className="spin"/> SALVANDO...</> : <><Save size={18}/> SALVAR ALTERAÇÕES</>}
                  </button>
               </div>
            </div>
         </div>
       )}
+
 
 
       {/* HEADER PRINCIPAL */}
@@ -472,23 +471,53 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         .t-v8 th { background: rgba(0,0,0,0.5); padding: 15px; font-size: 9px; color: #444; font-weight: 900; text-align: left; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #1a1a24; }
         .t-v8 td { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02); font-size: 12px; word-break: break-word; overflow-wrap: anywhere; }
         
-        .progress-pill { background: rgba(16, 217, 140, 0.1); color: #10d98c; font-size: 9px; padding: 2px 8px; border-radius: 6px; font-weight: 900; }
+        .progress-pill { background: rgba(16, 217, 140, 0.1); color: #10d98c; font-size: 9px; padding: 2px 8px; border-radius: 6px; font-weight: 900; box-shadow: 0 0 10px rgba(16, 217, 140, 0.1); }
 
+        /* MODAL STYLES RECONSTRUCTED */
+        .overlay-v8 { 
+          position: fixed; inset: 0; background: rgba(0,0,0,0.8); 
+          backdrop-filter: blur(20px); z-index: 9999; display: flex; 
+          align-items: center; justify-content: center; padding: 20px;
+          animation: fadeIn 0.3s ease-out;
+        }
+        .modal-v8 { 
+          width: 100%; max-width: 650px; border-radius: 30px; 
+          background: rgba(15, 15, 25, 0.95); 
+          border: 1px solid rgba(255,255,255,0.08);
+          box-shadow: 0 40px 100px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(255,255,255,0.05);
+          overflow: hidden;
+        }
+        .m-h { padding: 30px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; }
+        .m-b { padding: 30px; display: flex; flex-direction: column; gap: 25px; }
+        .m-f { padding: 25px 30px; background: rgba(0,0,0,0.3); border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: flex-end; align-items: center; gap: 20px; }
         
+        .modal-icon-header { width: 44px; height: 44px; background: rgba(79, 124, 255, 0.1); border-radius: 14px; display: flex; align-items: center; justify-content: center; color: #4f7cff; }
+        .modal-grid-top { display: grid; grid-template-columns: 80px 1fr 1fr; gap: 15px; }
+
+        .f-group { display: flex; flex-direction: column; gap: 8px; }
+        .f-group label { font-size: 9px; font-weight: 900; color: #444; letter-spacing: 0.1em; }
+        .main-title-inp { font-size: 16px !important; font-weight: 800 !important; color: #10d98c !important; }
+        .desc-area { text-transform: none; line-height: 1.6; font-size: 13px; color: #aaa; min-height: 120px; }
+
+        .close-x { background: rgba(255,255,255,0.03); border: none; color: #555; cursor: pointer; padding: 10px; border-radius: 12px; transition: 0.2s; }
+        .close-x:hover { background: rgba(255,77,106,0.1); color: #ff4d6a; transform: scale(1.1); }
+        
+        .big-btn { padding: 16px 32px !important; font-size: 12px !important; letter-spacing: 0.05em; }
+
         .n-pill { background: rgba(255,255,255,0.03); padding: 4px 10px; border-radius: 8px; color: #666; font-weight: 900; }
         .bold { font-weight: 800; color: #eee; } 
         .blue-txt { color: #4f7cff; font-weight: 700; font-size: 11px; } 
         .dim { color: #666; font-size: 11px; max-width: 400px; text-transform: none; line-height: 1.5; }
         
-        .inp-v8 { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; padding: 10px; color: #fff; width: 100%; outline: none; font-size: 12px; transition: 0.2s; }
-        .inp-v8:focus { border-color: #4f7cff; background: rgba(79, 124, 255, 0.04); }
+        .inp-v8 { background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px 15px; color: #fff; width: 100%; outline: none; font-size: 13px; transition: 0.2s; }
+        .inp-v8:focus { border-color: #4f7cff; background: rgba(79, 124, 255, 0.05); }
         .status-inp { color: #10d98c; font-weight: 800; }
         .p-rel { position: relative; width: 180px; }
         .loader-mini { position: absolute; top: -5px; right: -5px; background: #4f7cff; border-radius: 50%; padding: 3px; }
 
         .btn-v8 { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 12px; font-size: 10px; font-weight: 800; cursor: pointer; border: none; transition: 0.2s; }
         .btn-v8.primary { background: #4f7cff; color: #fff; }
-        .primary-gradient { background: linear-gradient(135deg, #4f7cff, #8b5cf6); color: #fff; }
+        .primary-gradient { background: linear-gradient(135deg, #4f7cff, #8b5cf6); color: #fff; box-shadow: 0 10px 20px rgba(79, 124, 255, 0.2); }
         
         .footer-v8 { padding: 30px; display: flex; justify-content: center; }
         .add-v8 { background: transparent; border: 1.5px dashed rgba(255,255,255,0.05); color: #444; padding: 15px 40px; border-radius: 18px; font-weight: 900; cursor: pointer; transition: 0.2s; }
@@ -501,10 +530,12 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         .icon-expand { color: #333; transition: 0.3s; }
         .checklist-instance.expanded .icon-expand { transform: rotate(180deg); color: #4f7cff; }
         
-        .scale-in { animation: scaleIn 0.3s ease-out; }
+        .scale-in { animation: scaleIn 0.3s cubic-bezier(0.2, 1, 0.3, 1); }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes scaleIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes scaleIn { from { opacity: 0; transform: translateY(-15px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
 
       `}</style>
     </div>
