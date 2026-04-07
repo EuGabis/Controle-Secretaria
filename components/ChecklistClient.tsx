@@ -169,6 +169,85 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
 
   return (
     <div className="checklist-v9">
+      {/* MODAL EDIÇÃO COMPLETA - MOVIDO PARA O TOPO PARA EVITAR CONFLITOS DE LAYOUT */}
+      {editingItem && (
+        <div className="overlay-v8" onClick={() => setEditingItem(null)}>
+           <div className="modal-v8 glass scale-in" onClick={e => e.stopPropagation()}>
+              <div className="m-h">
+                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div className="modal-icon-header"><Edit3 size={18}/></div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                       <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '900' }}>EDITAR ETAPA DO PROCESSO</h3>
+                       <span style={{ fontSize: '10px', color: '#666', fontWeight: '700' }}>CONFIGURAÇÕES DA ETAPA #{editingItem.item_n}</span>
+                    </div>
+                 </div>
+                 <button onClick={() => setEditingItem(null)} className="close-x"><X size={20}/></button>
+              </div>
+              <div className="m-b">
+                 <div className="modal-grid-top">
+                    <div className="f-group">
+                       <label>Nº #</label>
+                       <input className="inp-v8" type="number" value={editingItem.item_n} onChange={e => setEditingItem({...editingItem, item_n: parseInt(e.target.value)})} />
+                    </div>
+                    <div className="f-group">
+                       <label>PRAZO / META</label>
+                       <input className="inp-v8" value={editingItem.contexto || ''} onChange={e => setEditingItem({...editingItem, contexto: e.target.value.toUpperCase()})} placeholder="EX: D-10" />
+                    </div>
+                    <div className="f-group">
+                       <label>RESPONSÁVEL</label>
+                       <input className="inp-v8" value={editingItem.responsavel || ''} onChange={e => setEditingItem({...editingItem, responsavel: e.target.value.toUpperCase()})} placeholder="QUEM FAZ?" />
+                    </div>
+                 </div>
+
+                 <div className="f-group">
+                    <label>TÍTULO DA ETAPA</label>
+                    <input className="inp-v8 main-title-inp" value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value.toUpperCase()})} placeholder="NOME DA TAREFA" />
+                 </div>
+
+                 <div className="f-group">
+                    <label>DESCRIÇÃO E LINKS (GOOGLE DRIVE, ETC)</label>
+                    <textarea className="inp-v8 desc-area" rows={5} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} placeholder="DETALHE O PROCESSO OU COLE LINKS AQUI" />
+                 </div>
+              </div>
+              <div className="m-f">
+                 <button className="btn-v8 primary-gradient" onClick={async () => {
+                    setSaving('modal-save')
+                    const targetN = editingItem.item_n
+                    const oldItem = itens.find(i => i.id === editingItem.id)
+                    
+                    if (oldItem?.item_n !== targetN) {
+                       const toShift = itens.filter(i => (i as any).turma_id === (editingItem as any).turma_id && i.item_n >= targetN && i.id !== editingItem.id)
+                       if (toShift.length > 0) {
+                          const shiftUpdates = toShift.map(i => ({ ...i, item_n: (i.item_n || 0) + 1, ordem: (i.ordem || 0) + 1 }))
+                          await supabase.from('checklist_itens').upsert(shiftUpdates)
+                       }
+                    }
+
+                    const { data, error } = await supabase.from('checklist_itens').update({
+                      item_n: editingItem.item_n,
+                      titulo: editingItem.titulo,
+                      contexto: editingItem.contexto,
+                      responsavel: editingItem.responsavel,
+                      descricao: editingItem.descricao,
+                      ordem: editingItem.item_n
+                    }).eq('id', editingItem.id).select().single()
+
+                    if (!error && data) {
+                       setItens(prev => prev.map(i => i.id === data.id ? data : i))
+                       setEditingItem(null)
+                    } else if (error) {
+                      alert('ERRO AO SALVAR: ' + error.message)
+                    }
+                    setSaving(null)
+                 }}>
+                    {saving === 'modal-save' ? <><Loader2 size={16} className="spin"/> PROCESSANDO...</> : <><Save size={16}/> SALVAR ALTERAÇÕES</>}
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
+
+
       {/* HEADER PRINCIPAL */}
       <div className="main-header glass">
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
@@ -205,9 +284,15 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                        <span className="turma-name">{turma.nome}</span>
                        {isPadrão && <span className="master-badge">MODÊLO MASTER</span>}
                     </div>
-                    <span className="turma-meta">{turmaItens.length} ETAPAS CONFIGURADAS</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span className="turma-meta">{turmaItens.length} ETAPAS CONFIGURADAS</span>
+                      <span className="progress-pill">
+                        {respostas.filter(r => r.turma_id === turma.id && r.status === 'OK').length} / {turmaItens.length} CONCLUÍDOS
+                      </span>
+                    </div>
                   </div>
                 </div>
+
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                   {saving === `header-${turma.id}` && <Loader2 size={14} className="spin" style={{color: '#4f7cff'}}/>}
                   <Edit3 size={18} className="icon-expand" />
@@ -235,15 +320,16 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                       <table className="t-v8">
                         <thead>
                           <tr>
-                             <th>#</th>
-                             <th>PRAZO</th>
-                             <th>RESPONSÁVEL</th>
-                             <th>ETAPA DO PROCESSO</th>
+                             <th style={{ width: '50px' }}>#</th>
+                             <th style={{ width: '150px' }}>PRAZO</th>
+                             <th style={{ width: '150px' }}>RESPONSÁVEL</th>
+                             <th style={{ width: '300px' }}>ETAPA DO PROCESSO</th>
                              <th>DESCRIÇÃO / LINKS</th>
-                             <th>DATA</th>
-                             <th>SITUAÇÃO</th>
+                             <th style={{ width: '160px' }}>DATA</th>
+                             <th style={{ width: '180px' }}>SITUAÇÃO</th>
                           </tr>
                         </thead>
+
                          <tbody>
                           {turmaItens.sort((a,b) => (a.item_n ?? 0) - (b.item_n ?? 0)).map(item => {
                             const resp = turmaRespostasMap[`${item.id}-${turma.id}`]
@@ -331,82 +417,8 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
       </div>
 
 
-      {/* MODAL EDIÇÃO COMPLETA */}
-      {editingItem && (
-        <div className="overlay-v8" onClick={() => setEditingItem(null)}>
-           <div className="modal-v8 glass scale-in" onClick={e => e.stopPropagation()}>
-              <div className="m-h">
-                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div className="modal-icon-header"><Edit3 size={18}/></div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                       <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '900' }}>EDITAR ETAPA DO PROCESSO</h3>
-                       <span style={{ fontSize: '10px', color: '#666', fontWeight: '700' }}>CONFIGURAÇÕES DA ETAPA #{editingItem.item_n}</span>
-                    </div>
-                 </div>
-                 <button onClick={() => setEditingItem(null)} className="close-x"><X size={20}/></button>
-              </div>
-              <div className="m-b">
-                 <div className="modal-grid-top">
-                    <div className="f-group">
-                       <label>Nº ORDEM / ID</label>
-                       <input className="inp-v8" type="number" value={editingItem.item_n} onChange={e => setEditingItem({...editingItem, item_n: parseInt(e.target.value)})} />
-                    </div>
-                    <div className="f-group">
-                       <label>PRAZO / META</label>
-                       <input className="inp-v8" value={editingItem.contexto || ''} onChange={e => setEditingItem({...editingItem, contexto: e.target.value.toUpperCase()})} placeholder="EX: D-10" />
-                    </div>
-                    <div className="f-group">
-                       <label>RESPONSÁVEL PADRÃO</label>
-                       <input className="inp-v8" value={editingItem.responsavel || ''} onChange={e => setEditingItem({...editingItem, responsavel: e.target.value.toUpperCase()})} placeholder="QUEM FAZ?" />
-                    </div>
-                 </div>
+      {/* MODAL IMPORTAÇÃO */}
 
-                 <div className="f-group">
-                    <label>TÍTULO PRINCIPAL DA ETAPA</label>
-                    <input className="inp-v8 main-title-inp" value={editingItem.titulo} onChange={e => setEditingItem({...editingItem, titulo: e.target.value.toUpperCase()})} placeholder="NOME DA TAREFA" />
-                 </div>
-
-                 <div className="f-group">
-                    <label>DESCRIÇÃO DETALHADA E LINKS ÚTEIS</label>
-                    <textarea className="inp-v8 desc-area" rows={5} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} placeholder="DETALHE O PROCESSO OU COLE LINKS AQUI" />
-                 </div>
-              </div>
-              <div className="m-f">
-                 <button className="btn-v8 primary-gradient" onClick={async () => {
-                    setSaving('modal-save')
-                    const targetN = editingItem.item_n
-                    const oldItem = itens.find(i => i.id === editingItem.id)
-                    
-                    if (oldItem?.item_n !== targetN) {
-                       const toShift = itens.filter(i => i.item_n >= targetN && i.id !== editingItem.id)
-                       if (toShift.length > 0) {
-                          const shiftUpdates = toShift.map(i => ({ ...i, item_n: (i.item_n || 0) + 1, ordem: (i.ordem || 0) + 1 }))
-                          await supabase.from('checklist_itens').upsert(shiftUpdates)
-                       }
-                    }
-
-                    const { data, error } = await supabase.from('checklist_itens').update({
-                      item_n: editingItem.item_n,
-                      titulo: editingItem.titulo,
-                      contexto: editingItem.contexto,
-                      responsavel: editingItem.responsavel,
-                      descricao: editingItem.descricao,
-                      ordem: editingItem.item_n
-                    }).eq('id', editingItem.id).select().single()
-
-                    if (!error && data) {
-                       const { data: allItens } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
-                       if (allItens) setItens(allItens)
-                       setEditingItem(null)
-                    }
-                    setSaving(null)
-                 }}>
-                    {saving === 'modal-save' ? <><Loader2 size={16} className="spin"/> PROCESSANDO...</> : <><Save size={16}/> SALVAR ALTERAÇÕES</>}
-                 </button>
-              </div>
-           </div>
-        </div>
-      )}
 
       {/* MODAL IMPORTAÇÃO */}
       {isImportModalOpen && (
@@ -456,9 +468,12 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         .h-v8-badge { width: 44px; height: 44px; background: linear-gradient(135deg, #4f7cff, #8b5cf6); border-radius: 12px; display: flex; align-items: center; justify-content: center; }
         .h-v8-title { background: transparent; border: none; font-size: 18px; font-weight: 900; color: #fff; width: 300px; outline: none; text-transform: uppercase; }
 
-        .t-v8 { width: 100%; border-collapse: collapse; min-width: 1200px; }
+        .t-v8 { width: 100%; border-collapse: collapse; min-width: 1200px; table-layout: fixed; }
         .t-v8 th { background: rgba(0,0,0,0.5); padding: 15px; font-size: 9px; color: #444; font-weight: 900; text-align: left; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #1a1a24; }
-        .t-v8 td { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02); font-size: 12px; }
+        .t-v8 td { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02); font-size: 12px; word-break: break-word; overflow-wrap: anywhere; }
+        
+        .progress-pill { background: rgba(16, 217, 140, 0.1); color: #10d98c; font-size: 9px; padding: 2px 8px; border-radius: 6px; font-weight: 900; }
+
         
         .n-pill { background: rgba(255,255,255,0.03); padding: 4px 10px; border-radius: 8px; color: #666; font-weight: 900; }
         .bold { font-weight: 800; color: #eee; } 
