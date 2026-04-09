@@ -335,13 +335,24 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                                       {isAdmin && (
                                         <div className="action-btns" style={{ display: 'flex', gap: '6px' }}>
                                           <button className="edit-btn" onClick={(e) => { e.stopPropagation(); setEditingItem(item); }}><Edit3 size={15}/></button>
-                                          <button className="del-btn" onClick={async (e) => {
-                                            e.stopPropagation();
-                                            if (confirm(`EXCLUIR?`)) {
-                                              await supabase.from('checklist_itens').delete().eq('id', item.id)
-                                              setItens(prev => prev.filter(i => i.id !== item.id))
-                                            }
-                                          }}><Trash2 size={15}/></button>
+                                            <button className="del-btn" onClick={async (e) => {
+                                              e.stopPropagation();
+                                              if (confirm(`EXCLUIR ESTA ETAPA? (SE FOR NO MASTER, EXCLUIRÁ DE TODAS AS TURMAS)`)) {
+                                                const isMaster = item.turma_id === GLOBAL_TURMA_ID
+                                                
+                                                if (isMaster) {
+                                                   // Deletar filhos primeiro (ou deixar o ON DELETE CASCADE do banco agir, mas vamos garantir via API)
+                                                   await supabase.from('checklist_itens').delete().eq('master_item_id', item.id)
+                                                }
+                                                
+                                                await supabase.from('checklist_itens').delete().eq('id', item.id)
+                                                
+                                                // Recarregar estado
+                                                const { data: allItens } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
+                                                if (allItens) setItens(allItens)
+                                                else setItens(prev => prev.filter(i => i.id !== item.id))
+                                              }
+                                            }}><Trash2 size={15}/></button>
                                         </div>
                                       )}
                                    </div>
