@@ -60,7 +60,8 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         descricao: i.descricao,
         tipo_campo: i.tipo_campo,
         ordem: i.ordem,
-        turma_id: newTurma.id
+        turma_id: newTurma.id,
+        master_item_id: i.id
       }))
 
       const { data: insertedItens, error: iErr } = await supabase.from('checklist_itens').insert(clonedItens).select()
@@ -219,19 +220,23 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                       const { data, error } = await supabase.from('checklist_itens').update(updates).eq('id', editingItem.id).select().single()
                       if (error) throw error
 
-                      // 2. Se for MASTER, propagar edição para itens com mesmo item_n em outras turmas? 
-                      // O usuário pediu especificamente para CRIAÇÃO, mas é bom propagar EDIÇÃO de títulos/descrições se for master.
+                      // 2. Se for MASTER, propagar edição para itens vinculados
                       if (isMaster && data) {
+                        // Procurar itens nas turmas que foram criados a partir deste item MASTER
+                        // Vamos usar o ID original do MASTER como referência estável (pode ser o master_item_id se já estiver populado)
+                        
                         await supabase.from('checklist_itens').update({
                            titulo: data.titulo,
                            contexto: data.contexto,
                            responsavel: data.responsavel,
-                           descricao: data.descricao
-                        }).eq('item_n', data.item_n).neq('turma_id', GLOBAL_TURMA_ID)
+                           descricao: data.descricao,
+                           item_n: data.item_n, // Sincroniza o número também!
+                           ordem: data.item_n
+                        }).eq('master_item_id', data.id) 
                       }
 
                       if (data) {
-                         // Recarregar tudo para garantir consistência após propagação em massa
+                         // Recarregar tudo para garantir consistência após propagação em massa e triggers do banco
                          const { data: allItens } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
                          if (allItens) setItens(allItens)
                          setEditingItem(null)
@@ -380,10 +385,11 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                            // 2. Se for o MASTER, propagar para TODAS as outras turmas existentes
                            if (turma.id === GLOBAL_TURMA_ID && masterItem) {
                              const otherTurmas = initialTurmas.filter(t => t.id !== GLOBAL_TURMA_ID)
-                             const propagationItens = otherTurmas.map(t => ({
-                               ...newItemData,
-                               turma_id: t.id
-                             }))
+                              const propagationItens = otherTurmas.map(t => ({
+                                ...newItemData,
+                                turma_id: t.id,
+                                master_item_id: masterItem.id
+                              }))
                              if (propagationItens.length > 0) {
                                await supabase.from('checklist_itens').insert(propagationItens)
                              }
