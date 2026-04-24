@@ -18,12 +18,35 @@ interface Props {
   respostas: ChecklistResposta[]
   perfil: string
   usuarioId: string
+  categoria?: string // imersao, inicio, encerramento
 }
 
-const GLOBAL_TURMA_ID = '00000000-0000-0000-0000-000000000000'
+const CATEGORIA_MASTERS: Record<string, string> = {
+  'imersao': '00000000-0000-0000-0000-000000000000',
+  'inicio': '00000000-0000-0000-0000-000000000001',
+  'encerramento': '00000000-0000-0000-0000-000000000002'
+}
 
-export default function ChecklistClient({ itens: initialItens, turmas: initialTurmas, respostas: initialRespostas, perfil, usuarioId }: Props) {
-  const [itens, setItens] = useState(initialItens)
+export default function ChecklistClient({ 
+  itens: initialItens, 
+  turmas: initialTurmas, 
+  respostas: initialRespostas, 
+  perfil, 
+  usuarioId,
+  categoria = 'imersao'
+}: Props) {
+  const MASTER_ID = CATEGORIA_MASTERS[categoria] || CATEGORIA_MASTERS['imersao']
+  
+  // Filtrar turmas e itens pela categoria
+  const filteredTurmas = useMemo(() => {
+    return initialTurmas.filter(t => (t.categoria || 'imersao') === categoria)
+  }, [initialTurmas, categoria])
+
+  const filteredItens = useMemo(() => {
+    return initialItens.filter(i => (i.categoria || 'imersao') === categoria)
+  }, [initialItens, categoria])
+
+  const [itens, setItens] = useState(initialItens) // Mantemos todos no state mas filtramos na renderização
   const [respostas, setRespostas] = useState(initialRespostas)
   const [expandedTurmaId, setExpandedTurmaId] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
@@ -46,12 +69,13 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
     try {
       const { data: newTurma, error: tErr } = await supabase.from('checklist_turmas').insert({
         nome: nome.toUpperCase(),
-        ativa: true
+        ativa: true,
+        categoria: categoria
       }).select().single()
 
       if (tErr || !newTurma) throw tErr
 
-      const templateItens = itens.filter(i => (i as any).turma_id === GLOBAL_TURMA_ID)
+      const templateItens = itens.filter(i => i.turma_id === MASTER_ID)
       const clonedItens = templateItens.map(i => ({
         item_n: i.item_n,
         titulo: i.titulo,
@@ -61,6 +85,7 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         tipo_campo: i.tipo_campo,
         ordem: i.ordem,
         turma_id: newTurma.id,
+        categoria: categoria,
         master_item_id: i.id
       }))
 
@@ -134,7 +159,7 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
 
 
   const exportToExcel = (turmaId: string, turmaNome: string) => {
-    const turmaItens = itens.filter(i => (i as any).turma_id === turmaId)
+    const turmaItens = itens.filter(i => i.turma_id === turmaId)
     const html = `<html><head><meta charset="UTF-8"></head><body><table>
       <tr><th colspan="7">${turmaNome}</th></tr>
       ${turmaItens.map(i => `<tr><td>${i.item_n}</td><td>${i.contexto}</td><td>${i.responsavel}</td><td>${i.titulo}</td><td>${i.descricao}</td><td>${turmaRespostasMap[`${i.id}-${turmaId}`]?.valor_data || ''}</td><td>${turmaRespostasMap[`${i.id}-${turmaId}`]?.valor_texto || ''}</td></tr>`).join('')}
@@ -150,11 +175,11 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
     const rows = text.split('\n').filter(l => l.trim())
     const newItems = rows.map((r, idx) => {
       const cols = r.split(';')
-      return { item_n: parseInt(cols[0]) || idx+1, titulo: cols[1] || 'ETAPA', responsavel: 'ADM', contexto: 'HOJE', tipo_campo: 'check', ordem: idx }
+      return { item_n: parseInt(cols[0]) || idx+1, titulo: cols[1] || 'ETAPA', responsavel: 'ADM', contexto: 'HOJE', tipo_campo: 'check', ordem: idx, categoria: categoria }
     })
-    if (importReplace) await supabase.from('checklist_itens').delete().neq('id', '0')
+    if (importReplace) await supabase.from('checklist_itens').delete().eq('categoria', categoria).neq('id', '0')
     const { data } = await supabase.from('checklist_itens').insert(newItems).select()
-    if (data) setItens(data)
+    if (data) setItens(prev => [...prev.filter(i => i.categoria !== categoria), ...data])
     setIsImporting(false); setIsImportModalOpen(false)
   }
 
@@ -206,7 +231,7 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                  <button className="btn-v8 primary-gradient big-btn" onClick={async () => {
                     setSaving('modal-save')
                     try {
-                      const isMaster = (editingItem as any).turma_id === GLOBAL_TURMA_ID
+                      const isMaster = editingItem.turma_id === MASTER_ID
                       const updates = {
                         item_n: editingItem.item_n,
                         titulo: editingItem.titulo,
@@ -222,21 +247,17 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
 
                       // 2. Se for MASTER, propagar edição para itens vinculados
                       if (isMaster && data) {
-                        // Procurar itens nas turmas que foram criados a partir deste item MASTER
-                        // Vamos usar o ID original do MASTER como referência estável (pode ser o master_item_id se já estiver populado)
-                        
                         await supabase.from('checklist_itens').update({
                            titulo: data.titulo,
                            contexto: data.contexto,
                            responsavel: data.responsavel,
                            descricao: data.descricao,
-                           item_n: data.item_n, // Sincroniza o número também!
+                           item_n: data.item_n,
                            ordem: data.item_n
                         }).eq('master_item_id', data.id) 
                       }
 
                       if (data) {
-                         // Recarregar tudo para garantir consistência após propagação em massa e triggers do banco
                          const { data: allItens } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
                          if (allItens) setItens(allItens)
                          setEditingItem(null)
@@ -257,7 +278,9 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           <div className="h-v8-badge"><DatabaseZap size={22} /></div>
           <div>
-            <h1 style={{ fontSize: '24px', fontWeight: '900', margin: 0 }}>SISTEMA DE CHECKLISTS</h1>
+            <h1 style={{ fontSize: '24px', fontWeight: '900', margin: 0 }}>
+              CHECKLIST - {categoria === 'imersao' ? 'IMERSÃO' : categoria === 'inicio' ? 'INÍCIO' : 'ENCERRAMENTO'}
+            </h1>
             <p style={{ fontSize: '10px', color: '#555', fontWeight: '700' }}>GESTÃO INDEPENDENTE DE PROCESSOS</p>
           </div>
         </div>
@@ -272,10 +295,10 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
       </div>
 
       <div className="checklist-container">
-        {initialTurmas.map(turma => {
+        {filteredTurmas.map(turma => {
           const isExpanded = expandedTurmaId === turma.id
-          const turmaItens = itens.filter(i => (i as any).turma_id === turma.id)
-          const isPadrão = turma.id === GLOBAL_TURMA_ID
+          const turmaItens = itens.filter(i => i.turma_id === turma.id)
+          const isPadrão = turma.id === MASTER_ID
 
           return (
             <div key={turma.id} className={`checklist-instance ${isExpanded ? 'expanded' : ''}`}>
@@ -338,19 +361,13 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                                             <button className="del-btn" onClick={async (e) => {
                                               e.stopPropagation();
                                               if (confirm(`EXCLUIR ESTA ETAPA? (SE FOR NO MASTER, EXCLUIRÁ DE TODAS AS TURMAS)`)) {
-                                                const isMaster = item.turma_id === GLOBAL_TURMA_ID
-                                                
+                                                const isMaster = item.turma_id === MASTER_ID
                                                 if (isMaster) {
-                                                   // Deletar filhos primeiro (ou deixar o ON DELETE CASCADE do banco agir, mas vamos garantir via API)
                                                    await supabase.from('checklist_itens').delete().eq('master_item_id', item.id)
                                                 }
-                                                
                                                 await supabase.from('checklist_itens').delete().eq('id', item.id)
-                                                
-                                                // Recarregar estado
                                                 const { data: allItens } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
                                                 if (allItens) setItens(allItens)
-                                                else setItens(prev => prev.filter(i => i.id !== item.id))
                                               }
                                             }}><Trash2 size={15}/></button>
                                         </div>
@@ -385,17 +402,15 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                            setSaving(`add-${turma.id}`)
                            const maxN = Math.max(0, ...turmaItens.map(i => i.item_n ?? 0))
                            const newItemData = {
-                             item_n: maxN + 1, titulo: 'NOVA ETAPA', contexto: 'D-X', responsavel: 'ADM', ordem: maxN + 1, tipo_campo: 'check', turma_id: turma.id
+                             item_n: maxN + 1, titulo: 'NOVA ETAPA', contexto: 'D-X', responsavel: 'ADM', ordem: maxN + 1, tipo_campo: 'check', turma_id: turma.id, categoria: categoria
                            }
 
-                           // 1. Criar o item principal
                            const { data: masterItem, error } = await supabase.from('checklist_itens').insert(newItemData).select().single()
                            
                            if (error) { alert('ERRO: ' + error.message); setSaving(null); return; }
 
-                           // 2. Se for o MASTER, propagar para TODAS as outras turmas existentes
-                           if (turma.id === GLOBAL_TURMA_ID && masterItem) {
-                             const otherTurmas = initialTurmas.filter(t => t.id !== GLOBAL_TURMA_ID)
+                           if (turma.id === MASTER_ID && masterItem) {
+                             const otherTurmas = filteredTurmas.filter(t => t.id !== MASTER_ID)
                               const propagationItens = otherTurmas.map(t => ({
                                 ...newItemData,
                                 turma_id: t.id,
@@ -406,13 +421,12 @@ export default function ChecklistClient({ itens: initialItens, turmas: initialTu
                              }
                            }
 
-                           // 3. Recarregar estado
                            const { data: allItens } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
                            if (allItens) setItens(allItens)
                            setSaving(null)
                         }}>
                            {saving === `add-${turma.id}` ? <Loader2 size={18} className="spin"/> : <Plus size={18} />} 
-                           {turma.id === GLOBAL_TURMA_ID ? 'ADICIONAR ETAPA (PROPAGAR PARA TODOS)' : 'ADICIONAR ETAPA LOCAL'}
+                           {turma.id === MASTER_ID ? 'ADICIONAR ETAPA (PROPAGAR PARA TODOS)' : 'ADICIONAR ETAPA LOCAL'}
                         </button>
                       </div>
                     )}

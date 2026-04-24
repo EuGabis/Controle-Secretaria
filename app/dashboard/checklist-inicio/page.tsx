@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ChecklistClient from '@/components/ChecklistClient'
 
-export default async function ChecklistPage() {
+export default async function ChecklistInicioPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -32,7 +32,7 @@ export default async function ChecklistPage() {
         respostas={respostas || []} 
         perfil={profile?.perfil || 'usuario'}
         usuarioId={user.id}
-        categoria="imersao"
+        categoria="inicio"
       />
     </div>
   )

@@ -84,6 +84,7 @@ export interface ChecklistItem {
   tipo_campo: 'check' | 'texto' | 'data'
   ordem: number
   turma_id: string
+  categoria?: string
   master_item_id?: string | null
   created_at: string
 }
@@ -92,6 +93,7 @@ export interface ChecklistTurma {
   id: string
   nome: string
   ativa: boolean
+  categoria?: string
   created_at: string
 }
 
