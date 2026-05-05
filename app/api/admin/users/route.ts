@@ -68,6 +68,34 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const { userId, novaSenha } = await request.json()
+    const supabase = createAdminClient()
+    const supabaseAuth = await createClient()
+    const { data: authData } = await supabaseAuth.auth.getUser()
+    const currentAdminId = authData?.user?.id
+
+    if (!currentAdminId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+    const { data: currentAdminData } = await supabase.from('usuarios').select('perfil').eq('id', currentAdminId).single()
+    if (currentAdminData?.perfil !== 'master') {
+      return NextResponse.json({ error: 'Apenas masters podem resetar senhas' }, { status: 403 })
+    }
+
+    if (!novaSenha || novaSenha.length < 6) {
+      return NextResponse.json({ error: 'A senha deve ter pelo menos 6 caracteres' }, { status: 400 })
+    }
+
+    const { error } = await supabase.auth.admin.updateUserById(userId, { password: novaSenha })
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+    return NextResponse.json({ success: true })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
+}
+
 export async function PATCH(request: NextRequest) {
   try {
     const { userId, nome, perfil } = await request.json()

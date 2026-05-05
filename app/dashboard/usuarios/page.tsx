@@ -21,5 +21,5 @@ export default async function UsuariosPage() {
     .order('perfil', { ascending: false }) // admins first
     .order('nome', { ascending: true })
 
-  return <UsuariosClient usuarios={usuarios || []} />
+  return <UsuariosClient usuarios={usuarios || []} currentPerfil={profile?.perfil ?? 'admin'} />
 }

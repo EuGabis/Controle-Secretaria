@@ -4,14 +4,15 @@ import { useState } from 'react'
 import { Usuario, Perfil } from '@/lib/types'
 import {
   Users, Plus, Pencil, Trash2, X, Loader2,
-  Shield, User, Search, CheckCircle
+  Shield, User, Search, CheckCircle, KeyRound
 } from 'lucide-react'
 
 interface Props {
   usuarios: Usuario[]
+  currentPerfil: Perfil
 }
 
-export default function UsuariosClient({ usuarios: initial }: Props) {
+export default function UsuariosClient({ usuarios: initial, currentPerfil }: Props) {
   const [usuarios, setUsuarios] = useState(initial)
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
@@ -20,6 +21,39 @@ export default function UsuariosClient({ usuarios: initial }: Props) {
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [form, setForm] = useState({ nome: '', email: '', senha: '', perfil: 'usuario' as Perfil })
+
+  const [resetTarget, setResetTarget] = useState<Usuario | null>(null)
+  const [resetSenha, setResetSenha] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
+  const [resetError, setResetError] = useState('')
+
+  const openReset = (u: Usuario) => {
+    setResetTarget(u)
+    setResetSenha('')
+    setResetError('')
+  }
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!resetTarget) return
+    setResetLoading(true)
+    setResetError('')
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: resetTarget.id, novaSenha: resetSenha }),
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setResetTarget(null)
+      showSuccess(`Senha de ${resetTarget.nome} redefinida com sucesso!`)
+    } catch (err: unknown) {
+      setResetError(err instanceof Error ? err.message : 'Erro desconhecido')
+    } finally {
+      setResetLoading(false)
+    }
+  }
 
   const filtered = usuarios.filter(u =>
     u.nome.toLowerCase().includes(search.toLowerCase()) ||
@@ -166,7 +200,7 @@ export default function UsuariosClient({ usuarios: initial }: Props) {
             <span className="badge" style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--accent-purple)' }}>{masters.length}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {masters.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} />)}
+            {masters.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} onReset={currentPerfil === 'master' ? openReset : undefined} />)}
           </div>
         </section>
       )}
@@ -182,7 +216,7 @@ export default function UsuariosClient({ usuarios: initial }: Props) {
             <span className="badge badge-blue">{admins.length}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {admins.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} />)}
+            {admins.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} onReset={currentPerfil === 'master' ? openReset : undefined} />)}
           </div>
         </section>
       )}
@@ -202,10 +236,68 @@ export default function UsuariosClient({ usuarios: initial }: Props) {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {colaboradores.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} />)}
+            {colaboradores.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} onReset={currentPerfil === 'master' ? openReset : undefined} />)}
           </div>
         )}
       </section>
+
+      {/* Modal Reset Senha */}
+      {resetTarget && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 50,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
+        }}>
+          <div className="glass" style={{ width: '100%', maxWidth: '420px', padding: '32px', position: 'relative' }}>
+            <button onClick={() => setResetTarget(null)}
+              style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <X size={20} />
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+              <KeyRound size={20} color="var(--accent-yellow, #f59e0b)" />
+              <h2 style={{ fontSize: '20px', fontWeight: '700' }}>Redefinir Senha</h2>
+            </div>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '24px' }}>
+              Definindo nova senha para <strong style={{ color: 'var(--text-primary)' }}>{resetTarget.nome}</strong>.
+              O restante dos dados do usuário não será alterado.
+            </p>
+            <form onSubmit={handleReset} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Nova senha *</label>
+                <input
+                  type="password"
+                  className="input-field"
+                  placeholder="Mínimo 6 caracteres"
+                  required
+                  minLength={6}
+                  value={resetSenha}
+                  onChange={e => setResetSenha(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              {resetError && (
+                <div style={{
+                  background: 'rgba(255,77,106,0.1)', border: '1px solid rgba(255,77,106,0.3)',
+                  borderRadius: '8px', padding: '10px 14px', color: 'var(--accent-red)', fontSize: '13px',
+                }}>
+                  {resetError}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '10px', paddingTop: '8px' }}>
+                <button type="button" className="btn-secondary" onClick={() => setResetTarget(null)} style={{ flex: 1 }}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-primary" disabled={resetLoading}
+                  style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  {resetLoading
+                    ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Salvando...</>
+                    : 'Redefinir Senha'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {showModal && (
@@ -295,7 +387,7 @@ export default function UsuariosClient({ usuarios: initial }: Props) {
   )
 }
 
-function UserRow({ user, onEdit, onDelete }: { user: Usuario; onEdit: (u: Usuario) => void; onDelete: (u: Usuario) => void }) {
+function UserRow({ user, onEdit, onDelete, onReset }: { user: Usuario; onEdit: (u: Usuario) => void; onDelete: (u: Usuario) => void; onReset?: (u: Usuario) => void }) {
   const isAdmin = user.perfil === 'admin' || user.perfil === 'master'
   const isMaster = user.perfil === 'master'
   return (
@@ -321,6 +413,16 @@ function UserRow({ user, onEdit, onDelete }: { user: Usuario; onEdit: (u: Usuari
         {isMaster ? '👑 Master' : isAdmin ? '🛡️ Admin' : '👤 Colaborador'}
       </span>
       <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+        {onReset && (
+          <button onClick={() => onReset(user)} title="Redefinir senha" style={{
+            width: '34px', height: '34px', borderRadius: '8px',
+            background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#f59e0b', transition: 'all 0.2s',
+          }}>
+            <KeyRound size={14} />
+          </button>
+        )}
         <button onClick={() => onEdit(user)} style={{
           width: '34px', height: '34px', borderRadius: '8px',
           background: 'rgba(79,124,255,0.08)', border: '1px solid rgba(79,124,255,0.2)',
