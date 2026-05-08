@@ -119,6 +119,7 @@ export interface ChecklistTurma {
   nome: string
   ativa: boolean
   categoria?: string
+  subtitulo?: string | null
   created_at: string
 }
 

@@ -37,11 +37,7 @@ export default function ChecklistClient({
 }: Props) {
   const MASTER_ID = CATEGORIA_MASTERS[categoria] || CATEGORIA_MASTERS['imersao']
   
-  // Filtrar turmas e itens pela categoria
-  const filteredTurmas = useMemo(() => {
-    return initialTurmas.filter(t => (t.categoria || 'imersao') === categoria)
-  }, [initialTurmas, categoria])
-
+  // Filtrar itens pela categoria (turmas usam turmasState abaixo)
   const filteredItens = useMemo(() => {
     return initialItens.filter(i => (i.categoria || 'imersao') === categoria)
   }, [initialItens, categoria])
@@ -124,11 +120,19 @@ export default function ChecklistClient({
     })
   }
 
-  const saveHeader = async (turmaId: string, field: 'nome' | 'descricao', value: string) => {
-    setSaving(`header-${turmaId}`); 
-    const update: any = { id: turmaId }; 
-    update[field] = value.toUpperCase()
+  const [turmasState, setTurmasState] = useState(initialTurmas)
+
+  const filteredTurmas = useMemo(() => {
+    return turmasState.filter(t => (t.categoria || 'imersao') === categoria)
+  }, [turmasState, categoria])
+
+  const saveHeader = async (turmaId: string, field: 'nome' | 'descricao' | 'subtitulo', value: string) => {
+    setSaving(`header-${turmaId}`);
+    const novoValor = field === 'subtitulo' ? value : value.toUpperCase()
+    const update: any = { id: turmaId }
+    update[field] = novoValor
     await supabase.from('checklist_turmas').upsert(update, { onConflict: 'id' })
+    setTurmasState(prev => prev.map(t => t.id === turmaId ? { ...t, [field]: novoValor } : t))
     setTimeout(() => setSaving(null), 500)
   }
 
@@ -366,7 +370,10 @@ export default function ChecklistClient({
                        <span className="turma-name">{turma.nome}</span>
                        {isPadrão && <span className="master-badge">MODÊLO MASTER</span>}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {turma.subtitulo && (
+                      <div className="turma-subtitulo">{turma.subtitulo}</div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
                       <span className="turma-meta">{turmaItens.length} ETAPAS</span>
                       <span className="progress-pill">
                         {respostas.filter(r => r.turma_id === turma.id && r.status === 'OK').length} / {turmaItens.length} CONCLUÍDOS
@@ -380,16 +387,29 @@ export default function ChecklistClient({
               {isExpanded && (
                 <div className="instance-content scale-in">
                   <div className="content-inner glass">
-                    <div className="table-header">
-                       <input className="h-v8-title" defaultValue={turma.nome} onBlur={e => saveHeader(turma.id, 'nome', e.target.value)} />
-                       <div style={{ display: 'flex', gap: '8px' }}>
-                         {isAdmin && !isPadrão && (
-                           <button className="btn-v8 primary-gradient" onClick={() => syncFromMaster(turma.id)} disabled={saving === `sync-${turma.id}`}>
-                             {saving === `sync-${turma.id}` ? <Loader2 size={16} className="spin"/> : <RefreshCw size={16}/>} SINCRONIZAR COM MASTER
-                           </button>
-                         )}
-                         <button className="btn-v8 primary" onClick={() => exportToExcel(turma.id, turma.nome)}><FileSpreadsheet size={16}/> EXPORTAR</button>
+                    <div className="table-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '12px' }}>
+                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                         <input className="h-v8-title" defaultValue={turma.nome} disabled={!isAdmin} onBlur={e => saveHeader(turma.id, 'nome', e.target.value)} />
+                         <div style={{ display: 'flex', gap: '8px' }}>
+                           {isAdmin && !isPadrão && (
+                             <button className="btn-v8 primary-gradient" onClick={() => syncFromMaster(turma.id)} disabled={saving === `sync-${turma.id}`}>
+                               {saving === `sync-${turma.id}` ? <Loader2 size={16} className="spin"/> : <RefreshCw size={16}/>} SINCRONIZAR COM MASTER
+                             </button>
+                           )}
+                           <button className="btn-v8 primary" onClick={() => exportToExcel(turma.id, turma.nome)}><FileSpreadsheet size={16}/> EXPORTAR</button>
+                         </div>
                        </div>
+                       <input
+                         className="h-v8-subtitulo"
+                         defaultValue={turma.subtitulo || ''}
+                         disabled={!isAdmin}
+                         placeholder={isAdmin ? 'SUBTÍTULO (OPCIONAL — ex: Início em 12/05/26 / Turma manhã / etc)' : ''}
+                         onBlur={e => {
+                           if ((e.target.value || '') !== (turma.subtitulo || '')) {
+                             saveHeader(turma.id, 'subtitulo', e.target.value)
+                           }
+                         }}
+                       />
                     </div>
 
                     <div className="table-wrapper">
@@ -525,6 +545,14 @@ export default function ChecklistClient({
         .instance-header { padding: 25px 30px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.3s; }
         .instance-header:hover { background: rgba(255,255,255,0.02); }
         .turma-name { font-size: 18px; font-weight: 900; }
+        .turma-subtitulo { font-size: 12px; font-weight: 600; color: #8b9bb4; margin-top: 4px; text-transform: none; letter-spacing: 0.01em; }
+        .h-v8-title { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px 16px; color: #fff; font-size: 16px; font-weight: 800; flex: 1; min-width: 200px; outline: none; text-transform: uppercase; }
+        .h-v8-title:focus { border-color: rgba(79,124,255,0.4); }
+        .h-v8-title:disabled { opacity: 0.7; cursor: default; }
+        .h-v8-subtitulo { background: rgba(0,0,0,0.25); border: 1px dashed rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; color: #b8c4d6; font-size: 13px; font-weight: 600; width: 100%; outline: none; text-transform: none; }
+        .h-v8-subtitulo::placeholder { color: #555; font-style: italic; font-size: 12px; }
+        .h-v8-subtitulo:focus { border-style: solid; border-color: rgba(79,124,255,0.3); background: rgba(0,0,0,0.4); }
+        .h-v8-subtitulo:disabled { opacity: 0.6; cursor: default; }
         .status-dot { width: 10px; height: 10px; border-radius: 50%; }
         .status-dot.gold { background: #ffcc00; }
         .status-dot.blue { background: #4f7cff; }
