@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Usuario, Perfil } from '@/lib/types'
 import {
   Users, Plus, Pencil, Trash2, X, Loader2,
-  Shield, User, Search, CheckCircle, KeyRound
+  Shield, User, Search, CheckCircle, KeyRound, Clock
 } from 'lucide-react'
 
 interface Props {
@@ -120,6 +120,24 @@ export default function UsuariosClient({ usuarios: initial, currentPerfil }: Pro
     }
   }
 
+  const toggleBancoHoras = async (u: Usuario) => {
+    const novoValor = !u.banco_horas_liberado
+    setUsuarios(prev => prev.map(x => x.id === u.id ? { ...x, banco_horas_liberado: novoValor } : x))
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: u.id, banco_horas_liberado: novoValor }),
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      showSuccess(`Banco de Horas ${novoValor ? 'liberado' : 'bloqueado'} para ${u.nome}.`)
+    } catch (err: unknown) {
+      setUsuarios(prev => prev.map(x => x.id === u.id ? { ...x, banco_horas_liberado: !novoValor } : x))
+      alert(err instanceof Error ? err.message : 'Erro ao alterar permissão')
+    }
+  }
+
   const handleDelete = async (u: Usuario) => {
     if (!confirm(`Tem certeza que quer excluir "${u.nome}"? Esta ação não pode ser desfeita.`)) return
     setLoading(true)
@@ -200,7 +218,7 @@ export default function UsuariosClient({ usuarios: initial, currentPerfil }: Pro
             <span className="badge" style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--accent-purple)' }}>{masters.length}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {masters.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} onReset={currentPerfil === 'master' ? openReset : undefined} />)}
+            {masters.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} onReset={currentPerfil === 'master' ? openReset : undefined} onToggleBH={toggleBancoHoras} />)}
           </div>
         </section>
       )}
@@ -216,7 +234,7 @@ export default function UsuariosClient({ usuarios: initial, currentPerfil }: Pro
             <span className="badge badge-blue">{admins.length}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {admins.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} onReset={currentPerfil === 'master' ? openReset : undefined} />)}
+            {admins.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} onReset={currentPerfil === 'master' ? openReset : undefined} onToggleBH={toggleBancoHoras} />)}
           </div>
         </section>
       )}
@@ -236,7 +254,7 @@ export default function UsuariosClient({ usuarios: initial, currentPerfil }: Pro
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {colaboradores.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} onReset={currentPerfil === 'master' ? openReset : undefined} />)}
+            {colaboradores.map(u => <UserRow key={u.id} user={u} onEdit={openEdit} onDelete={handleDelete} onReset={currentPerfil === 'master' ? openReset : undefined} onToggleBH={toggleBancoHoras} />)}
           </div>
         )}
       </section>
@@ -387,9 +405,10 @@ export default function UsuariosClient({ usuarios: initial, currentPerfil }: Pro
   )
 }
 
-function UserRow({ user, onEdit, onDelete, onReset }: { user: Usuario; onEdit: (u: Usuario) => void; onDelete: (u: Usuario) => void; onReset?: (u: Usuario) => void }) {
+function UserRow({ user, onEdit, onDelete, onReset, onToggleBH }: { user: Usuario; onEdit: (u: Usuario) => void; onDelete: (u: Usuario) => void; onReset?: (u: Usuario) => void; onToggleBH?: (u: Usuario) => void }) {
   const isAdmin = user.perfil === 'admin' || user.perfil === 'master'
   const isMaster = user.perfil === 'master'
+  const bhAtivo = !!user.banco_horas_liberado
   return (
     <div className="glass" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '14px' }}>
       <div style={{
@@ -413,6 +432,19 @@ function UserRow({ user, onEdit, onDelete, onReset }: { user: Usuario; onEdit: (
         {isMaster ? '👑 Master' : isAdmin ? '🛡️ Admin' : '👤 Colaborador'}
       </span>
       <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+        {onToggleBH && !isAdmin && (
+          <button onClick={() => onToggleBH(user)} title={bhAtivo ? 'Bloquear Banco de Horas' : 'Liberar Banco de Horas'} style={{
+            height: '34px', padding: '0 10px', borderRadius: '8px',
+            background: bhAtivo ? 'rgba(16,217,140,0.12)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${bhAtivo ? 'rgba(16,217,140,0.3)' : 'var(--border)'}`,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+            color: bhAtivo ? 'var(--accent-green)' : 'var(--text-muted)',
+            fontSize: '11px', fontWeight: '600', fontFamily: 'Inter, sans-serif',
+            transition: 'all 0.2s',
+          }}>
+            <Clock size={13} /> {bhAtivo ? 'BH ON' : 'BH OFF'}
+          </button>
+        )}
         {onReset && (
           <button onClick={() => onReset(user)} title="Redefinir senha" style={{
             width: '34px', height: '34px', borderRadius: '8px',

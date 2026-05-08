@@ -9,7 +9,7 @@ import {
   LayoutDashboard, CheckSquare, Bell, ArrowUpDown,
   LogOut, ChevronRight, Shield, User, Users,
   ListTodo, Calendar, CalendarDays, Repeat, RefreshCw,
-  Menu, X, MessageSquare, ShieldAlert, ClipboardCheck
+  Menu, X, MessageSquare, ShieldAlert, ClipboardCheck, Clock
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 
@@ -68,8 +68,8 @@ export default function Sidebar({ user }: SidebarProps) {
     { href: '/dashboard', icon: LayoutDashboard, label: '📊 DASHBOARD' },
     { href: '/dashboard/tarefas', icon: CheckSquare, label: 'Tarefas' },
     { href: '/dashboard/checklist', icon: ClipboardCheck, label: 'Checklist Imersão' },
-    { href: '/dashboard/checklist-inicio', icon: ClipboardCheck, label: 'Checklist Início' },
-    { href: '/dashboard/checklist-encerramento', icon: ClipboardCheck, label: 'Checklist Encerramento' },
+    { href: '/dashboard/checklist-inicio', icon: ClipboardCheck, label: 'Início Turma' },
+    { href: '/dashboard/checklist-encerramento', icon: ClipboardCheck, label: 'Encerramento de Turma' },
     { href: '/dashboard/usuarios', icon: Users, label: 'Usuários' },
     { href: '/dashboard/feedbacks', icon: MessageSquare, label: 'Feedbacks' },
     { href: '/dashboard/follow-up', icon: ArrowUpDown, label: 'Follow Up' },
@@ -80,11 +80,11 @@ export default function Sidebar({ user }: SidebarProps) {
     adminLinks.push({ href: '/dashboard/auditoria', icon: ShieldAlert, label: 'Auditoria' })
   }
 
-  const userLinks = [
+  const userLinks: any[] = [
     { href: '/dashboard/minhas-tarefas', icon: ListTodo, label: 'Todas Tarefas', exact: true },
     { href: '/dashboard/checklist', icon: ClipboardCheck, label: 'Checklist Imersão' },
-    { href: '/dashboard/checklist-inicio', icon: ClipboardCheck, label: 'Checklist Início' },
-    { href: '/dashboard/checklist-encerramento', icon: ClipboardCheck, label: 'Checklist Encerramento' },
+    { href: '/dashboard/checklist-inicio', icon: ClipboardCheck, label: 'Início Turma' },
+    { href: '/dashboard/checklist-encerramento', icon: ClipboardCheck, label: 'Encerramento de Turma' },
     { href: '/dashboard/minhas-tarefas?tipo=diaria', icon: RefreshCw, label: 'Diárias', tipo: 'diaria', isSub: true },
     { href: '/dashboard/minhas-tarefas?tipo=semanal', icon: Calendar, label: 'Semanais', tipo: 'semanal', isSub: true },
     { href: '/dashboard/minhas-tarefas?tipo=mensal', icon: CalendarDays, label: 'Mensais', tipo: 'mensal', isSub: true },
@@ -92,6 +92,12 @@ export default function Sidebar({ user }: SidebarProps) {
     { href: '/dashboard/meus-feedbacks', icon: MessageSquare, label: 'Meus Feedbacks' },
     { href: '/dashboard/notificacoes', icon: Bell, label: 'Notificações', badge: notifCount },
   ]
+
+  if (user?.banco_horas_liberado) {
+    userLinks.splice(userLinks.length - 1, 0, {
+      href: '/dashboard/banco-horas', icon: Clock, label: 'Banco de Horas'
+    })
+  }
 
   const links = isAdmin ? adminLinks : userLinks
 

@@ -6,10 +6,10 @@
 import { useState, useMemo } from 'react'
 import { ChecklistItem, ChecklistTurma, ChecklistResposta } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
-import { 
+import {
   Plus, Trash2, Edit3, Save, Loader2, X, DatabaseZap,
-  UploadCloud, FileSpreadsheet, 
-  ExternalLink
+  UploadCloud, FileSpreadsheet,
+  ExternalLink, RefreshCw
 } from 'lucide-react'
 
 interface Props {
@@ -158,6 +158,62 @@ export default function ChecklistClient({
   }
 
 
+  const syncFromMaster = async (turmaId: string) => {
+    setSaving(`sync-${turmaId}`)
+    try {
+      const masterItens = itens.filter(i => i.turma_id === MASTER_ID)
+      const turmaItens = itens.filter(i => i.turma_id === turmaId)
+      const turmaItensByMaster = new Map(
+        turmaItens.filter(i => i.master_item_id).map(i => [i.master_item_id as string, i])
+      )
+
+      const updates = masterItens
+        .filter(m => turmaItensByMaster.has(m.id))
+        .map(m => {
+          const local = turmaItensByMaster.get(m.id)!
+          return supabase.from('checklist_itens').update({
+            titulo: m.titulo,
+            contexto: m.contexto,
+            responsavel: m.responsavel,
+            descricao: m.descricao,
+            item_n: m.item_n,
+            ordem: m.item_n,
+            tipo_campo: m.tipo_campo
+          }).eq('id', local.id)
+        })
+
+      const novos = masterItens
+        .filter(m => !turmaItensByMaster.has(m.id))
+        .map(m => ({
+          item_n: m.item_n,
+          titulo: m.titulo,
+          contexto: m.contexto,
+          responsavel: m.responsavel,
+          descricao: m.descricao,
+          tipo_campo: m.tipo_campo,
+          ordem: m.item_n,
+          turma_id: turmaId,
+          categoria: categoria,
+          master_item_id: m.id
+        }))
+
+      await Promise.allSettled(updates)
+      if (novos.length > 0) {
+        await supabase.from('checklist_itens').insert(novos)
+      }
+
+      const { data: allItens } = await supabase
+        .from('checklist_itens').select('*').order('item_n', { ascending: true })
+      if (allItens) setItens(allItens)
+      alert(`Sincronizado! ${novos.length} novas etapas adicionadas, ${updates.length} atualizadas.`)
+    } catch (err) {
+      console.error(err)
+      alert('Erro ao sincronizar com o Master')
+    } finally {
+      setSaving(null)
+    }
+  }
+
   const exportToExcel = (turmaId: string, turmaNome: string) => {
     const turmaItens = itens.filter(i => i.turma_id === turmaId)
     const html = `<html><head><meta charset="UTF-8"></head><body><table>
@@ -279,7 +335,7 @@ export default function ChecklistClient({
           <div className="h-v8-badge"><DatabaseZap size={22} /></div>
           <div>
             <h1 style={{ fontSize: '24px', fontWeight: '900', margin: 0 }}>
-              CHECKLIST - {categoria === 'imersao' ? 'IMERSÃO' : categoria === 'inicio' ? 'INÍCIO' : 'ENCERRAMENTO'}
+              {categoria === 'imersao' ? 'CHECKLIST - IMERSÃO' : categoria === 'inicio' ? 'INÍCIO TURMA' : 'ENCERRAMENTO DE TURMA'}
             </h1>
             <p style={{ fontSize: '10px', color: '#555', fontWeight: '700' }}>GESTÃO INDEPENDENTE DE PROCESSOS</p>
           </div>
@@ -326,7 +382,14 @@ export default function ChecklistClient({
                   <div className="content-inner glass">
                     <div className="table-header">
                        <input className="h-v8-title" defaultValue={turma.nome} onBlur={e => saveHeader(turma.id, 'nome', e.target.value)} />
-                       <button className="btn-v8 primary" onClick={() => exportToExcel(turma.id, turma.nome)}><FileSpreadsheet size={16}/> EXPORTAR</button>
+                       <div style={{ display: 'flex', gap: '8px' }}>
+                         {isAdmin && !isPadrão && (
+                           <button className="btn-v8 primary-gradient" onClick={() => syncFromMaster(turma.id)} disabled={saving === `sync-${turma.id}`}>
+                             {saving === `sync-${turma.id}` ? <Loader2 size={16} className="spin"/> : <RefreshCw size={16}/>} SINCRONIZAR COM MASTER
+                           </button>
+                         )}
+                         <button className="btn-v8 primary" onClick={() => exportToExcel(turma.id, turma.nome)}><FileSpreadsheet size={16}/> EXPORTAR</button>
+                       </div>
                     </div>
 
                     <div className="table-wrapper">

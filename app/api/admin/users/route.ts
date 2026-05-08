@@ -98,7 +98,8 @@ export async function PUT(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { userId, nome, perfil } = await request.json()
+    const body = await request.json()
+    const { userId, nome, perfil, banco_horas_liberado } = body
     const supabase = createAdminClient()
     const supabaseAuth = await createClient()
     const { data: authData } = await supabaseAuth.auth.getUser()
@@ -106,15 +107,33 @@ export async function PATCH(request: NextRequest) {
 
     if (!currentAdminId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-    const { data: existingUser } = await supabase.from('usuarios').select('admin_id').eq('id', userId).single()
-    if (existingUser?.admin_id !== currentAdminId && userId !== currentAdminId) {
+    const { data: currentAdminData } = await supabase
+      .from('usuarios').select('perfil').eq('id', currentAdminId).single()
+
+    const { data: existingUser } = await supabase
+      .from('usuarios').select('admin_id, master_id').eq('id', userId).single()
+
+    const isMaster = currentAdminData?.perfil === 'master'
+    const isOwnerAdmin = existingUser?.admin_id === currentAdminId
+    const isOwnerMaster = existingUser?.master_id === currentAdminId
+    const isSelf = userId === currentAdminId
+
+    if (!isMaster && !isOwnerAdmin && !isOwnerMaster && !isSelf) {
       return NextResponse.json({ error: 'Permissão negada' }, { status: 403 })
     }
 
+    const updates: Record<string, unknown> = {}
+    if (typeof nome === 'string') updates.nome = nome
+    if (typeof perfil === 'string') updates.perfil = perfil
+    if (typeof banco_horas_liberado === 'boolean') updates.banco_horas_liberado = banco_horas_liberado
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'Nada para atualizar' }, { status: 400 })
+    }
 
     const { error } = await supabase
       .from('usuarios')
-      .update({ nome, perfil })
+      .update(updates)
       .eq('id', userId)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })

@@ -13,7 +13,32 @@ export interface Usuario {
   perfil: Perfil
   admin_id?: string | null
   master_id?: string | null
+  banco_horas_liberado?: boolean
   created_at: string
+}
+
+export interface BancoHorasLancamento {
+  id: string
+  usuario_id: string
+  data: string | null
+  horas: string | null
+  em_haver: string | null
+  observacao: string | null
+  ordem: number
+  created_at: string
+  updated_at: string
+}
+
+export interface BancoHorasFerias {
+  id: string
+  usuario_id: string
+  descricao: string | null
+  dias: string | null
+  periodo: string | null
+  status: string | null
+  ordem: number
+  created_at: string
+  updated_at: string
 }
 
 export interface Tarefa {
