@@ -71,6 +71,7 @@ export default function Sidebar({ user }: SidebarProps) {
     { href: '/dashboard/checklist-inicio', icon: ClipboardCheck, label: 'Início Turma' },
     { href: '/dashboard/checklist-encerramento', icon: ClipboardCheck, label: 'Encerramento de Turma' },
     { href: '/dashboard/usuarios', icon: Users, label: 'Usuários' },
+    { href: '/dashboard/banco-horas', icon: Clock, label: 'Banco de Horas' },
     { href: '/dashboard/feedbacks', icon: MessageSquare, label: 'Feedbacks' },
     { href: '/dashboard/follow-up', icon: ArrowUpDown, label: 'Follow Up' },
     { href: '/dashboard/notificacoes', icon: Bell, label: 'Notificações', badge: notifCount },
