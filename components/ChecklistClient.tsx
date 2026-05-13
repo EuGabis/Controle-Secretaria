@@ -3,13 +3,13 @@
 // v9.1 - CHECKLIST ULTIMATE (FRAMING & ALIGNMENT FIX) 📊
 // TUDO FUNCIONANDO, SINCRONIZADO E ENQUADRADO
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { ChecklistItem, ChecklistTurma, ChecklistResposta } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import {
   Plus, Trash2, Edit3, Save, Loader2, X, DatabaseZap,
   UploadCloud, FileSpreadsheet,
-  ExternalLink, RefreshCw
+  ExternalLink, RefreshCw, ListOrdered, Trash
 } from 'lucide-react'
 
 interface Props {
@@ -216,6 +216,87 @@ export default function ChecklistClient({
       alert('Erro ao sincronizar com o Master')
     } finally {
       setSaving(null)
+    }
+  }
+
+  const renumerarEtapas = async (turmaId: string) => {
+    setSaving(`renumerar-${turmaId}`)
+    try {
+      const turmaItens = [...itens.filter(i => i.turma_id === turmaId)]
+        .sort((a, b) => (a.item_n ?? 0) - (b.item_n ?? 0))
+
+      const updates: Promise<unknown>[] = []
+      turmaItens.forEach((item, idx) => {
+        const novoN = idx + 1
+        if (item.item_n === novoN && item.ordem === novoN) return
+        updates.push(
+          (async () => {
+            await supabase.from('checklist_itens')
+              .update({ item_n: novoN, ordem: novoN })
+              .eq('id', item.id)
+          })()
+        )
+      })
+
+      if (updates.length === 0) {
+        alert('Numeração já está em ordem.')
+        return
+      }
+
+      await Promise.allSettled(updates)
+      const { data: allItens } = await supabase
+        .from('checklist_itens').select('*').order('item_n', { ascending: true })
+      if (allItens) setItens(allItens)
+      alert(`Renumerado! ${updates.length} etapas reorganizadas em sequência 1..${turmaItens.length}.`)
+    } catch (err) {
+      console.error(err)
+      alert('Erro ao renumerar etapas')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const deletarTurma = async (turmaId: string, turmaNome: string) => {
+    if (turmaId === MASTER_ID) {
+      alert('A turma Master não pode ser apagada.')
+      return
+    }
+    const c1 = confirm(`⚠️ ATENÇÃO\n\nVocê está prestes a APAGAR a turma:\n\n"${turmaNome}"\n\nIsso vai apagar TODAS as etapas e respostas dessa turma. Esta ação é IRREVERSÍVEL.\n\nDeseja continuar?`)
+    if (!c1) return
+    const c2 = prompt(`Para confirmar, digite o nome da turma EXATAMENTE como aparece:\n\n${turmaNome}`)
+    if (c2 !== turmaNome) {
+      alert('Nome não confere. Operação cancelada.')
+      return
+    }
+    setSaving(`del-turma-${turmaId}`)
+    try {
+      // delete em cascata — itens e respostas
+      await supabase.from('checklist_respostas').delete().eq('turma_id', turmaId)
+      await supabase.from('checklist_itens').delete().eq('turma_id', turmaId)
+      const { error } = await supabase.from('checklist_turmas').delete().eq('id', turmaId)
+      if (error) throw error
+
+      setTurmasState(prev => prev.filter(t => t.id !== turmaId))
+      setItens(prev => prev.filter(i => i.turma_id !== turmaId))
+      setRespostas(prev => prev.filter(r => r.turma_id !== turmaId))
+      if (expandedTurmaId === turmaId) setExpandedTurmaId(null)
+      alert(`Turma "${turmaNome}" apagada com sucesso.`)
+    } catch (err: any) {
+      alert('Erro ao apagar turma: ' + (err?.message || err))
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const saveDescricao = async (itemId: string, novaDescricao: string) => {
+    const { data, error } = await supabase
+      .from('checklist_itens')
+      .update({ descricao: novaDescricao || null })
+      .eq('id', itemId)
+      .select().single()
+    if (error) { alert('Erro ao salvar descrição: ' + error.message); throw error }
+    if (data) {
+      setItens(prev => prev.map(i => i.id === data.id ? { ...i, descricao: data.descricao } : i))
     }
   }
 
@@ -427,13 +508,23 @@ export default function ChecklistClient({
                     <div className="table-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '12px' }}>
                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                          <input className="h-v8-title" defaultValue={turma.nome} disabled={!isAdmin} onBlur={e => saveHeader(turma.id, 'nome', e.target.value)} />
-                         <div style={{ display: 'flex', gap: '8px' }}>
+                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                           {isAdmin && (
+                             <button className="btn-v8 btn-renumerar" onClick={() => renumerarEtapas(turma.id)} disabled={saving === `renumerar-${turma.id}`}>
+                               {saving === `renumerar-${turma.id}` ? <Loader2 size={16} className="spin"/> : <ListOrdered size={16}/>} RENUMERAR ETAPAS
+                             </button>
+                           )}
                            {isAdmin && !isPadrão && (
                              <button className="btn-v8 primary-gradient" onClick={() => syncFromMaster(turma.id)} disabled={saving === `sync-${turma.id}`}>
                                {saving === `sync-${turma.id}` ? <Loader2 size={16} className="spin"/> : <RefreshCw size={16}/>} SINCRONIZAR COM MASTER
                              </button>
                            )}
                            <button className="btn-v8 primary" onClick={() => exportToExcel(turma.id, turma.nome)}><FileSpreadsheet size={16}/> EXPORTAR</button>
+                           {isAdmin && !isPadrão && (
+                             <button className="btn-v8 btn-danger" onClick={() => deletarTurma(turma.id, turma.nome)} disabled={saving === `del-turma-${turma.id}`}>
+                               {saving === `del-turma-${turma.id}` ? <Loader2 size={16} className="spin"/> : <Trash size={16}/>} APAGAR TURMA
+                             </button>
+                           )}
                          </div>
                        </div>
                        <input
@@ -494,7 +585,9 @@ export default function ChecklistClient({
                                       )}
                                    </div>
                                 </td>
-                                <td className="dim" style={{ verticalAlign: 'middle' }}>{renderFormattedText(item.descricao)}</td>
+                                <td style={{ verticalAlign: 'middle', padding: '12px' }}>
+                                  <DescricaoCell item={item} isAdmin={isAdmin} onSave={saveDescricao} renderReadOnly={renderFormattedText} />
+                                </td>
                                 <td style={{ verticalAlign: 'middle' }}>
                                   <input type="date" className="inp-v8" value={resp?.valor_data || ''} onChange={e => performSave(item.id, turma.id, { valor_data: e.target.value })} />
                                 </td>
@@ -619,6 +712,10 @@ export default function ChecklistClient({
         .save-desc-btn { background: linear-gradient(135deg, #10d98c, #059669); color: #fff; margin-top: 10px; align-self: flex-start; padding: 10px 16px; font-size: 11px; box-shadow: 0 4px 14px rgba(16,217,140,0.25); }
         .save-desc-btn:hover { box-shadow: 0 6px 20px rgba(16,217,140,0.4); transform: translateY(-1px); }
         .save-desc-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-renumerar { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+        .btn-renumerar:hover { background: rgba(245,158,11,0.2); }
+        .btn-danger { background: rgba(255,77,106,0.12); color: #ff4d6a; border: 1px solid rgba(255,77,106,0.3); }
+        .btn-danger:hover { background: rgba(255,77,106,0.22); }
 
         .overlay-v8 { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(25px); z-index: 9999; display: flex; align-items: center; justify-content: center; }
         .modal-v8 { width: 100%; max-width: 700px; border-radius: 32px; background: rgba(15, 15, 25, 0.98); border: 1px solid rgba(255,255,255,0.1); }
@@ -629,16 +726,94 @@ export default function ChecklistClient({
         .f-group { display: flex; flex-direction: column; gap: 5px; }
         .f-group label { font-size: 9px; color: #444; font-weight: 900; }
 
-        .action-btns { opacity: 0; transition: 0.3s; }
-        tr:hover .action-btns { opacity: 1; }
-        .edit-btn:hover { color: #4f7cff; }
-        .del-btn:hover { color: #ff4d6a; }
+        .action-btns { opacity: 1; transition: 0.3s; display: flex; gap: 6px; }
+        .edit-btn, .del-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 6px; color: #888; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+        .edit-btn:hover { color: #4f7cff; background: rgba(79,124,255,0.12); border-color: rgba(79,124,255,0.3); }
+        .del-btn:hover { color: #ff4d6a; background: rgba(255,77,106,0.12); border-color: rgba(255,77,106,0.3); }
+
+        .desc-cell { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+        .desc-textarea { width: 100%; min-height: 60px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 10px; color: #b8c4d6; font-size: 12px; font-family: 'Inter', sans-serif; line-height: 1.5; resize: vertical; outline: none; text-transform: none; }
+        .desc-textarea:focus { border-color: rgba(79,124,255,0.4); background: rgba(0,0,0,0.4); }
+        .desc-save-inline { align-self: flex-start; display: flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #10d98c, #059669); color: #fff; border: none; border-radius: 8px; padding: 6px 12px; font-size: 10px; font-weight: 800; cursor: pointer; transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.04em; box-shadow: 0 2px 8px rgba(16,217,140,0.25); }
+        .desc-save-inline:hover { box-shadow: 0 4px 14px rgba(16,217,140,0.4); transform: translateY(-1px); }
+        .desc-save-inline:disabled { opacity: 0.55; cursor: not-allowed; }
+        .desc-dirty-dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; box-shadow: 0 0 8px rgba(245,158,11,0.6); animation: pulse 1.5s ease-in-out infinite; }
+        @keyframes pulse { 0%,100% { opacity: 0.7 } 50% { opacity: 1 } }
 
         .scale-in { animation: scaleIn 0.3s ease-out; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes scaleIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
+    </div>
+  )
+}
+
+// ===========================
+// Célula de descrição editável com botão SALVAR inline
+// ===========================
+interface DescricaoCellProps {
+  item: ChecklistItem
+  isAdmin: boolean
+  onSave: (itemId: string, descricao: string) => Promise<void>
+  renderReadOnly: (text: string | null) => React.ReactNode
+}
+
+function DescricaoCell({ item, isAdmin, onSave, renderReadOnly }: DescricaoCellProps) {
+  const [text, setText] = useState(item.descricao || '')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setText(item.descricao || '')
+  }, [item.id, item.descricao])
+
+  const dirty = text !== (item.descricao || '')
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await onSave(item.id, text)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!isAdmin) {
+    return <div style={{ color: '#777', fontSize: 12, lineHeight: 1.6, textTransform: 'none' }}>{renderReadOnly(item.descricao)}</div>
+  }
+
+  return (
+    <div className="desc-cell">
+      <textarea
+        className="desc-textarea"
+        value={text}
+        rows={3}
+        placeholder="Cole links, observações ou detalhes desta turma..."
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => {
+          // Ctrl+Enter ou Cmd+Enter salva rapidinho
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && dirty && !saving) {
+            e.preventDefault()
+            handleSave()
+          }
+        }}
+      />
+      {dirty && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="desc-dirty-dot" title="Alterações não salvas" />
+          <button className="desc-save-inline" onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 size={11} className="spin" /> : <Save size={11} />}
+            {saving ? 'SALVANDO...' : 'SALVAR DESCRIÇÃO'}
+          </button>
+          <button
+            onClick={() => setText(item.descricao || '')}
+            disabled={saving}
+            style={{ background: 'transparent', border: 'none', color: '#666', fontSize: 10, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
     </div>
   )
 }
