@@ -562,11 +562,11 @@ export default function ChecklistClient({
                         <thead>
                           <tr>
                              <th style={{ width: '60px', textAlign: 'center' }}>#</th>
-                             <th style={{ width: '130px' }}>PRAZO</th>
-                             <th style={{ width: '150px' }}>RESPONSÁVEL</th>
-                             <th style={{ width: '240px' }}>ETAPA DO PROCESSO</th>
+                             <th style={{ width: '125px' }}>PRAZO</th>
+                             <th style={{ width: '145px' }}>RESPONSÁVEL</th>
+                             <th style={{ width: '230px' }}>ETAPA DO PROCESSO</th>
                              <th>DESCRIÇÃO / LINKS</th>
-                             <th style={{ width: '140px' }}>DATA</th>
+                             <th style={{ width: '175px' }}>DATA</th>
                              <th style={{ width: '170px' }}>SITUAÇÃO</th>
                           </tr>
                         </thead>
@@ -608,7 +608,12 @@ export default function ChecklistClient({
                                     : <span style={{ color: '#444', fontStyle: 'italic', fontSize: 12 }}>— sem descrição —</span>}
                                 </td>
                                 <td style={{ verticalAlign: 'middle' }}>
-                                  <input type="date" className="inp-v8" value={resp?.valor_data || ''} onChange={e => performSave(item.id, turma.id, { valor_data: e.target.value })} />
+                                  <input
+                                    type="date"
+                                    className="inp-v8 date-inp"
+                                    value={resp?.valor_data || ''}
+                                    onChange={e => performSave(item.id, turma.id, { valor_data: e.target.value })}
+                                  />
                                 </td>
                                 <td style={{ verticalAlign: 'middle' }}>
                                    <div className="p-rel">
@@ -722,7 +727,17 @@ export default function ChecklistClient({
         .blue-txt { color: #4f7cff; font-weight: 900; font-size: 11px; }
         .dim { color: #777; font-size: 12px; line-height: 1.6; text-transform: none; }
         
-        .inp-v8 { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; color: #fff; width: 100%; outline: none; }
+        .inp-v8 { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; color: #fff; width: 100%; outline: none; box-sizing: border-box; }
+        .date-inp { padding: 10px 10px; font-size: 13px; font-family: 'Inter', sans-serif; letter-spacing: 0.02em; color-scheme: dark; min-height: 42px; }
+        .date-inp::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; opacity: 0.7; padding: 0; margin-left: 4px; }
+        .date-inp::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+        .date-inp::-webkit-datetime-edit { color: #d4dceb; }
+        .date-inp::-webkit-datetime-edit-text { color: #555; padding: 0 2px; }
+        .date-inp::-webkit-datetime-edit-month-field,
+        .date-inp::-webkit-datetime-edit-day-field,
+        .date-inp::-webkit-datetime-edit-year-field { color: #d4dceb; font-weight: 600; }
+        .date-inp:focus { border-color: rgba(79,124,255,0.4); box-shadow: 0 0 0 3px rgba(79,124,255,0.08); }
+        .date-inp:not(:placeholder-shown):not(:focus) { color: #10d98c; }
         .status-inp { color: #10d98c; font-weight: 900; }
         .p-rel { position: relative; width: 100%; }
         .loader-mini { position: absolute; top: -5px; right: -5px; background: #4f7cff; border-radius: 50%; }
