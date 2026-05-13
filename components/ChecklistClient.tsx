@@ -562,12 +562,12 @@ export default function ChecklistClient({
                         <thead>
                           <tr>
                              <th style={{ width: '60px', textAlign: 'center' }}>#</th>
-                             <th style={{ width: '140px' }}>PRAZO</th>
-                             <th style={{ width: '160px' }}>RESPONSÁVEL</th>
-                             <th style={{ width: '260px' }}>ETAPA DO PROCESSO</th>
-                             <th style={{ minWidth: '420px', width: '420px' }}>DESCRIÇÃO / LINKS</th>
-                             <th style={{ width: '150px' }}>DATA</th>
-                             <th style={{ width: '180px' }}>SITUAÇÃO</th>
+                             <th style={{ width: '130px' }}>PRAZO</th>
+                             <th style={{ width: '150px' }}>RESPONSÁVEL</th>
+                             <th style={{ width: '240px' }}>ETAPA DO PROCESSO</th>
+                             <th>DESCRIÇÃO / LINKS</th>
+                             <th style={{ width: '140px' }}>DATA</th>
+                             <th style={{ width: '170px' }}>SITUAÇÃO</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -712,10 +712,10 @@ export default function ChecklistClient({
         .table-header { padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); }
         .table-wrapper { overflow-x: auto; width: 100%; }
 
-        .t-v8 { width: 1370px; min-width: 1370px; border-collapse: collapse; table-layout: fixed; }
+        .t-v8 { width: 100%; min-width: 1100px; border-collapse: collapse; table-layout: fixed; }
         .t-v8 th { background: rgba(0,0,0,0.4); padding: 18px 20px; font-size: 10px; color: #555; text-align: left; border-bottom: 2px solid #1a1a24; }
         .t-v8 td { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; word-break: break-word; vertical-align: middle; }
-        .t-v8 td.desc-td { padding: 16px 14px !important; min-width: 420px; width: 420px; vertical-align: top; }
+        .t-v8 td.desc-td { padding: 18px 18px !important; vertical-align: top; }
         
         .n-pill { background: rgba(79, 124, 255, 0.1); border: 1px solid rgba(79, 124, 255, 0.2); width: 36px; height: 36px; border-radius: 12px; color: #4f7cff; font-weight: 900; display: flex; align-items: center; justify-content: center; margin: 0 auto; }
         .bold { font-weight: 800; color: #fff; }
