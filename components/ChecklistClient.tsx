@@ -36,6 +36,9 @@ export default function ChecklistClient({
   categoria = 'imersao'
 }: Props) {
   const MASTER_ID = CATEGORIA_MASTERS[categoria] || CATEGORIA_MASTERS['imersao']
+  // Flag: melhorias recentes (apagar turma, renumerar, badge de gaps, subtítulo, etc)
+  // SÓ se aplicam aos checklists de Início e Encerramento, não ao de Imersão.
+  const isImersao = categoria === 'imersao'
   
   // Filtrar itens pela categoria (turmas usam turmasState abaixo)
   const filteredItens = useMemo(() => {
@@ -223,17 +226,20 @@ export default function ChecklistClient({
         await supabase.from('checklist_itens').insert(novos)
       }
 
-      // Refetch primeiro para o state ter os ids novos antes de renumerar
+      // Refetch primeiro
       const { data: refreshed } = await supabase
         .from('checklist_itens').select('*').order('item_n', { ascending: true })
       if (refreshed) setItens(refreshed)
 
-      // Renumera automaticamente em sequência 1..N sem gaps
-      const renumeradas = await renumerarSilencioso(turmaId)
+      // Renumera automaticamente apenas para Início/Encerramento (não para Imersão)
+      let renumeradas = 0
+      if (!isImersao) {
+        renumeradas = await renumerarSilencioso(turmaId)
+        const { data: allItens } = await supabase
+          .from('checklist_itens').select('*').order('item_n', { ascending: true })
+        if (allItens) setItens(allItens)
+      }
 
-      const { data: allItens } = await supabase
-        .from('checklist_itens').select('*').order('item_n', { ascending: true })
-      if (allItens) setItens(allItens)
       alert(`Sincronizado! ${novos.length} novas etapas adicionadas, ${updates.length} atualizadas${renumeradas > 0 ? `, ${renumeradas} renumeradas` : ''}.`)
     } catch (err) {
       console.error(err)
@@ -531,13 +537,13 @@ export default function ChecklistClient({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                        <span className="turma-name">{turma.nome}</span>
                        {isPadrão && <span className="master-badge">MODÊLO MASTER</span>}
-                       {temGaps && isAdmin && (
+                       {!isImersao && temGaps && isAdmin && (
                          <span className="gap-badge" title="A numeração tem lacunas — clique em RENUMERAR ETAPAS">
                            ⚠ NUMERAÇÃO COM LACUNAS
                          </span>
                        )}
                     </div>
-                    {turma.subtitulo && (
+                    {!isImersao && turma.subtitulo && (
                       <div className="turma-subtitulo">{turma.subtitulo}</div>
                     )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
@@ -558,7 +564,7 @@ export default function ChecklistClient({
                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                          <input className="h-v8-title" defaultValue={turma.nome} disabled={!isAdmin} onBlur={e => saveHeader(turma.id, 'nome', e.target.value)} />
                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                           {isAdmin && (
+                           {isAdmin && !isImersao && (
                              <button className="btn-v8 btn-renumerar" onClick={() => renumerarEtapas(turma.id)} disabled={saving === `renumerar-${turma.id}`}>
                                {saving === `renumerar-${turma.id}` ? <Loader2 size={16} className="spin"/> : <ListOrdered size={16}/>} RENUMERAR ETAPAS
                              </button>
@@ -569,25 +575,27 @@ export default function ChecklistClient({
                              </button>
                            )}
                            <button className="btn-v8 primary" onClick={() => exportToExcel(turma.id, turma.nome)}><FileSpreadsheet size={16}/> EXPORTAR</button>
-                           {isAdmin && !isPadrão && (
+                           {isAdmin && !isPadrão && !isImersao && (
                              <button className="btn-v8 btn-danger" onClick={() => deletarTurma(turma.id, turma.nome)} disabled={saving === `del-turma-${turma.id}`}>
                                {saving === `del-turma-${turma.id}` ? <Loader2 size={16} className="spin"/> : <Trash size={16}/>} APAGAR TURMA
                              </button>
                            )}
                          </div>
                        </div>
-                       <input
-                         key={`sub-${turma.id}-${turma.subtitulo ?? ''}`}
-                         className="h-v8-subtitulo"
-                         defaultValue={turma.subtitulo || ''}
-                         disabled={!isAdmin}
-                         placeholder={isAdmin ? 'SUBTÍTULO (OPCIONAL — ex: Início em 12/05/26 / Turma manhã / etc)' : ''}
-                         onBlur={e => {
-                           if ((e.target.value || '') !== (turma.subtitulo || '')) {
-                             saveHeader(turma.id, 'subtitulo', e.target.value)
-                           }
-                         }}
-                       />
+                       {!isImersao && (
+                         <input
+                           key={`sub-${turma.id}-${turma.subtitulo ?? ''}`}
+                           className="h-v8-subtitulo"
+                           defaultValue={turma.subtitulo || ''}
+                           disabled={!isAdmin}
+                           placeholder={isAdmin ? 'SUBTÍTULO (OPCIONAL — ex: Início em 12/05/26 / Turma manhã / etc)' : ''}
+                           onBlur={e => {
+                             if ((e.target.value || '') !== (turma.subtitulo || '')) {
+                               saveHeader(turma.id, 'subtitulo', e.target.value)
+                             }
+                           }}
+                         />
+                       )}
                     </div>
 
                     <div className="table-wrapper">
@@ -632,17 +640,18 @@ export default function ChecklistClient({
                                                 }
                                                 await supabase.from('checklist_itens').delete().eq('id', item.id)
 
-                                                // refresh state antes de renumerar
+                                                // refresh state
                                                 const { data: refreshed } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
                                                 if (refreshed) setItens(refreshed)
 
-                                                // renumera silenciosamente cada turma afetada
-                                                for (const tId of turmasAfetadas) {
-                                                  await renumerarSilencioso(tId)
+                                                // Renumera silenciosamente apenas para Início/Encerramento (não Imersão)
+                                                if (!isImersao) {
+                                                  for (const tId of turmasAfetadas) {
+                                                    await renumerarSilencioso(tId)
+                                                  }
+                                                  const { data: allItens } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
+                                                  if (allItens) setItens(allItens)
                                                 }
-
-                                                const { data: allItens } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
-                                                if (allItens) setItens(allItens)
                                               }
                                             }}><Trash2 size={15}/></button>
                                         </div>
