@@ -128,12 +128,28 @@ export default function ChecklistClient({
 
   const saveHeader = async (turmaId: string, field: 'nome' | 'descricao' | 'subtitulo', value: string) => {
     setSaving(`header-${turmaId}`);
-    const novoValor = field === 'subtitulo' ? value : value.toUpperCase()
-    const update: any = { id: turmaId }
-    update[field] = novoValor
-    await supabase.from('checklist_turmas').upsert(update, { onConflict: 'id' })
-    setTurmasState(prev => prev.map(t => t.id === turmaId ? { ...t, [field]: novoValor } : t))
-    setTimeout(() => setSaving(null), 500)
+    const novoValor = field === 'subtitulo' ? (value || null) : value.toUpperCase()
+    const payload: Record<string, unknown> = {}
+    payload[field] = novoValor
+
+    const { data, error } = await supabase
+      .from('checklist_turmas')
+      .update(payload)
+      .eq('id', turmaId)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('[saveHeader] erro Supabase:', error)
+      alert(`Erro ao salvar ${field}: ${error.message}`)
+      setSaving(null)
+      return
+    }
+
+    if (data) {
+      setTurmasState(prev => prev.map(t => t.id === turmaId ? { ...t, ...data } : t))
+    }
+    setTimeout(() => setSaving(null), 300)
   }
 
   const performSave = async (itemId: string, turmaId: string, updates: Partial<ChecklistResposta>) => {
@@ -528,6 +544,7 @@ export default function ChecklistClient({
                          </div>
                        </div>
                        <input
+                         key={`sub-${turma.id}-${turma.subtitulo ?? ''}`}
                          className="h-v8-subtitulo"
                          defaultValue={turma.subtitulo || ''}
                          disabled={!isAdmin}
