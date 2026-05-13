@@ -223,10 +223,18 @@ export default function ChecklistClient({
         await supabase.from('checklist_itens').insert(novos)
       }
 
+      // Refetch primeiro para o state ter os ids novos antes de renumerar
+      const { data: refreshed } = await supabase
+        .from('checklist_itens').select('*').order('item_n', { ascending: true })
+      if (refreshed) setItens(refreshed)
+
+      // Renumera automaticamente em sequência 1..N sem gaps
+      const renumeradas = await renumerarSilencioso(turmaId)
+
       const { data: allItens } = await supabase
         .from('checklist_itens').select('*').order('item_n', { ascending: true })
       if (allItens) setItens(allItens)
-      alert(`Sincronizado! ${novos.length} novas etapas adicionadas, ${updates.length} atualizadas.`)
+      alert(`Sincronizado! ${novos.length} novas etapas adicionadas, ${updates.length} atualizadas${renumeradas > 0 ? `, ${renumeradas} renumeradas` : ''}.`)
     } catch (err) {
       console.error(err)
       alert('Erro ao sincronizar com o Master')
@@ -235,41 +243,60 @@ export default function ChecklistClient({
     }
   }
 
+  // Versão silenciosa, usada após sync/delete. Retorna quantas etapas foram renumeradas.
+  const renumerarSilencioso = async (turmaId: string): Promise<number> => {
+    const turmaItens = [...itens.filter(i => i.turma_id === turmaId)]
+      .sort((a, b) => (a.item_n ?? 0) - (b.item_n ?? 0))
+
+    const updates: Promise<unknown>[] = []
+    turmaItens.forEach((item, idx) => {
+      const novoN = idx + 1
+      if (item.item_n === novoN && item.ordem === novoN) return
+      updates.push(
+        (async () => {
+          await supabase.from('checklist_itens')
+            .update({ item_n: novoN, ordem: novoN })
+            .eq('id', item.id)
+        })()
+      )
+    })
+
+    if (updates.length === 0) return 0
+    await Promise.allSettled(updates)
+    return updates.length
+  }
+
   const renumerarEtapas = async (turmaId: string) => {
     setSaving(`renumerar-${turmaId}`)
     try {
-      const turmaItens = [...itens.filter(i => i.turma_id === turmaId)]
-        .sort((a, b) => (a.item_n ?? 0) - (b.item_n ?? 0))
-
-      const updates: Promise<unknown>[] = []
-      turmaItens.forEach((item, idx) => {
-        const novoN = idx + 1
-        if (item.item_n === novoN && item.ordem === novoN) return
-        updates.push(
-          (async () => {
-            await supabase.from('checklist_itens')
-              .update({ item_n: novoN, ordem: novoN })
-              .eq('id', item.id)
-          })()
-        )
-      })
-
-      if (updates.length === 0) {
-        alert('Numeração já está em ordem.')
-        return
-      }
-
-      await Promise.allSettled(updates)
+      const qtd = await renumerarSilencioso(turmaId)
       const { data: allItens } = await supabase
         .from('checklist_itens').select('*').order('item_n', { ascending: true })
       if (allItens) setItens(allItens)
-      alert(`Renumerado! ${updates.length} etapas reorganizadas em sequência 1..${turmaItens.length}.`)
+      if (qtd === 0) {
+        alert('Numeração já está em ordem.')
+      } else {
+        alert(`Renumerado! ${qtd} etapas reorganizadas em sequência.`)
+      }
     } catch (err) {
       console.error(err)
       alert('Erro ao renumerar etapas')
     } finally {
       setSaving(null)
     }
+  }
+
+  // Detecta se há gaps na numeração (ex: 1,2,3,5 → falta 4)
+  const temGapsNaNumeracao = (turmaId: string): boolean => {
+    const nums = itens
+      .filter(i => i.turma_id === turmaId)
+      .map(i => i.item_n ?? 0)
+      .sort((a, b) => a - b)
+    if (nums.length === 0) return false
+    for (let i = 0; i < nums.length; i++) {
+      if (nums[i] !== i + 1) return true
+    }
+    return false
   }
 
   const deletarTurma = async (turmaId: string, turmaNome: string) => {
@@ -493,6 +520,7 @@ export default function ChecklistClient({
           const isExpanded = expandedTurmaId === turma.id
           const turmaItens = itens.filter(i => i.turma_id === turma.id)
           const isPadrão = turma.id === MASTER_ID
+          const temGaps = temGapsNaNumeracao(turma.id)
 
           return (
             <div key={turma.id} className={`checklist-instance ${isExpanded ? 'expanded' : ''}`}>
@@ -503,6 +531,11 @@ export default function ChecklistClient({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                        <span className="turma-name">{turma.nome}</span>
                        {isPadrão && <span className="master-badge">MODÊLO MASTER</span>}
+                       {temGaps && isAdmin && (
+                         <span className="gap-badge" title="A numeração tem lacunas — clique em RENUMERAR ETAPAS">
+                           ⚠ NUMERAÇÃO COM LACUNAS
+                         </span>
+                       )}
                     </div>
                     {turma.subtitulo && (
                       <div className="turma-subtitulo">{turma.subtitulo}</div>
@@ -590,10 +623,24 @@ export default function ChecklistClient({
                                               e.stopPropagation();
                                               if (confirm(`EXCLUIR ESTA ETAPA? (SE FOR NO MASTER, EXCLUIRÁ DE TODAS AS TURMAS)`)) {
                                                 const isMaster = item.turma_id === MASTER_ID
+                                                const turmasAfetadas = new Set<string>()
+                                                turmasAfetadas.add(item.turma_id)
                                                 if (isMaster) {
-                                                   await supabase.from('checklist_itens').delete().eq('master_item_id', item.id)
+                                                  // coleta todas as turmas que tinham esse master_item
+                                                  itens.filter(i => i.master_item_id === item.id).forEach(i => turmasAfetadas.add(i.turma_id))
+                                                  await supabase.from('checklist_itens').delete().eq('master_item_id', item.id)
                                                 }
                                                 await supabase.from('checklist_itens').delete().eq('id', item.id)
+
+                                                // refresh state antes de renumerar
+                                                const { data: refreshed } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
+                                                if (refreshed) setItens(refreshed)
+
+                                                // renumera silenciosamente cada turma afetada
+                                                for (const tId of turmasAfetadas) {
+                                                  await renumerarSilencioso(tId)
+                                                }
+
                                                 const { data: allItens } = await supabase.from('checklist_itens').select('*').order('item_n', { ascending: true })
                                                 if (allItens) setItens(allItens)
                                               }
@@ -711,6 +758,7 @@ export default function ChecklistClient({
         .status-dot.gold { background: #ffcc00; }
         .status-dot.blue { background: #4f7cff; }
         .master-badge { background: rgba(255,204,0,0.1); color: #ffcc00; font-size: 9px; padding: 2px 8px; border-radius: 6px; margin-left: 8px; }
+        .gap-badge { background: rgba(245,158,11,0.15); color: #f59e0b; font-size: 9px; font-weight: 800; padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(245,158,11,0.3); letter-spacing: 0.04em; }
         .progress-pill { background: rgba(16, 217, 140, 0.1); color: #10d98c; font-size: 10px; padding: 4px 12px; border-radius: 8px; font-weight: 900; }
 
         .content-inner { padding: 0; background: rgba(0,0,0,0.2); border-radius: 0 0 20px 20px; overflow: hidden; }
