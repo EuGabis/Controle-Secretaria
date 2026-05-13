@@ -3,7 +3,7 @@
 // v9.1 - CHECKLIST ULTIMATE (FRAMING & ALIGNMENT FIX) 📊
 // TUDO FUNCIONANDO, SINCRONIZADO E ENQUADRADO
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { ChecklistItem, ChecklistTurma, ChecklistResposta } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -602,8 +602,10 @@ export default function ChecklistClient({
                                       )}
                                    </div>
                                 </td>
-                                <td className="desc-td">
-                                  <DescricaoCell item={item} isAdmin={isAdmin} onSave={saveDescricao} renderReadOnly={renderFormattedText} />
+                                <td className="desc-td dim">
+                                  {item.descricao
+                                    ? renderFormattedText(item.descricao)
+                                    : <span style={{ color: '#444', fontStyle: 'italic', fontSize: 12 }}>— sem descrição —</span>}
                                 </td>
                                 <td style={{ verticalAlign: 'middle' }}>
                                   <input type="date" className="inp-v8" value={resp?.valor_data || ''} onChange={e => performSave(item.id, turma.id, { valor_data: e.target.value })} />
@@ -749,27 +751,9 @@ export default function ChecklistClient({
         .edit-btn:hover { color: #4f7cff; background: rgba(79,124,255,0.12); border-color: rgba(79,124,255,0.3); }
         .del-btn:hover { color: #ff4d6a; background: rgba(255,77,106,0.12); border-color: rgba(255,77,106,0.3); }
 
-        /* Descrição — leitura por padrão, edição sob demanda */
-        .desc-readonly { display: flex; flex-direction: column; gap: 8px; }
-        .desc-readonly .desc-content { color: #9aa6bb; font-size: 13px; line-height: 1.6; text-transform: none; white-space: pre-wrap; word-break: break-word; }
-        .desc-readonly .desc-content a { color: #4f7cff; font-weight: 700; text-decoration: underline; }
-        .desc-empty { color: #444; font-style: italic; font-size: 12px; }
-        .desc-edit-trigger { align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; background: transparent; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 4px 10px; color: #666; font-size: 9px; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; transition: all 0.15s; font-family: 'Inter', sans-serif; }
-        .desc-edit-trigger:hover { color: #4f7cff; border-color: rgba(79,124,255,0.3); background: rgba(79,124,255,0.06); }
-
-        .desc-editing { display: flex; flex-direction: column; gap: 8px; }
-        .desc-textarea { width: 100%; min-height: 130px; background: rgba(0,0,0,0.4); border: 1px solid rgba(79,124,255,0.3); border-radius: 10px; padding: 12px 14px; color: #d4dceb; font-size: 13px; font-family: 'Inter', sans-serif; line-height: 1.65; resize: vertical; outline: none; text-transform: none; box-sizing: border-box; word-break: break-word; }
-        .desc-textarea::placeholder { color: #555; font-style: italic; }
-        .desc-textarea:focus { border-color: rgba(79,124,255,0.5); box-shadow: 0 0 0 3px rgba(79,124,255,0.1); }
-
-        .desc-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .desc-save-inline { display: inline-flex; align-items: center; gap: 5px; background: linear-gradient(135deg, #10d98c, #059669); color: #fff; border: none; border-radius: 7px; padding: 6px 12px; font-size: 10px; font-weight: 800; cursor: pointer; transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.04em; box-shadow: 0 2px 8px rgba(16,217,140,0.2); font-family: 'Inter', sans-serif; }
-        .desc-save-inline:hover { box-shadow: 0 4px 14px rgba(16,217,140,0.4); transform: translateY(-1px); }
-        .desc-save-inline:disabled { opacity: 0.55; cursor: not-allowed; }
-        .desc-cancel-inline { display: inline-flex; align-items: center; gap: 5px; background: transparent; color: #888; border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; padding: 6px 12px; font-size: 10px; font-weight: 700; cursor: pointer; transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.04em; font-family: 'Inter', sans-serif; }
-        .desc-cancel-inline:hover { color: #ff4d6a; border-color: rgba(255,77,106,0.3); background: rgba(255,77,106,0.06); }
-        .desc-cancel-inline:disabled { opacity: 0.55; cursor: not-allowed; }
-        .desc-hint { font-size: 9px; color: #444; font-style: italic; margin-left: auto; }
+        /* Célula descrição = somente leitura (edição é via modal pelo ícone lápis) */
+        .desc-td.dim { color: #9aa6bb; font-size: 13px; line-height: 1.6; text-transform: none; white-space: pre-wrap; word-break: break-word; }
+        .desc-td.dim a { color: #4f7cff; font-weight: 700; text-decoration: underline; }
 
         .scale-in { animation: scaleIn 0.3s ease-out; }
         .spin { animation: spin 1s linear infinite; }
@@ -780,99 +764,4 @@ export default function ChecklistClient({
   )
 }
 
-// ===========================
-// Célula de descrição editável com botão SALVAR inline
-// ===========================
-interface DescricaoCellProps {
-  item: ChecklistItem
-  isAdmin: boolean
-  onSave: (itemId: string, descricao: string) => Promise<void>
-  renderReadOnly: (text: string | null) => React.ReactNode
-}
-
-function DescricaoCell({ item, isAdmin, onSave, renderReadOnly }: DescricaoCellProps) {
-  const [editing, setEditing] = useState(false)
-  const [text, setText] = useState(item.descricao || '')
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    setText(item.descricao || '')
-    setEditing(false)
-  }, [item.id, item.descricao])
-
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      await onSave(item.id, text)
-      setEditing(false)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const cancelEdit = () => {
-    if (text !== (item.descricao || '')) {
-      if (!confirm('Descartar alterações não salvas?')) return
-    }
-    setText(item.descricao || '')
-    setEditing(false)
-  }
-
-  // MODO LEITURA (padrão): mostra texto formatado com links clicáveis
-  if (!editing) {
-    const hasContent = !!(item.descricao && item.descricao.trim().length > 0)
-    return (
-      <div className="desc-readonly">
-        <div className="desc-content">
-          {hasContent
-            ? renderReadOnly(item.descricao)
-            : <span className="desc-empty">— sem descrição —</span>}
-        </div>
-        {isAdmin && (
-          <button
-            type="button"
-            className="desc-edit-trigger"
-            onClick={() => setEditing(true)}
-            title="Editar descrição (não é sobrescrita pelo sync)"
-          >
-            <Edit3 size={11} /> {hasContent ? 'EDITAR' : 'ADICIONAR DESCRIÇÃO'}
-          </button>
-        )}
-      </div>
-    )
-  }
-
-  // MODO EDIÇÃO (admin only, ativado pelo botão)
-  return (
-    <div className="desc-editing">
-      <textarea
-        className="desc-textarea"
-        autoFocus
-        value={text}
-        rows={5}
-        placeholder="Cole links, observações ou detalhes desta turma..."
-        onChange={e => setText(e.target.value)}
-        onKeyDown={e => {
-          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !saving) {
-            e.preventDefault()
-            handleSave()
-          }
-          if (e.key === 'Escape') {
-            e.preventDefault()
-            cancelEdit()
-          }
-        }}
-      />
-      <div className="desc-actions">
-        <button className="desc-save-inline" onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 size={11} className="spin" /> : <Save size={11} />}
-          {saving ? 'SALVANDO...' : 'SALVAR'}
-        </button>
-        <button className="desc-cancel-inline" onClick={cancelEdit} disabled={saving} type="button">
-          <X size={11} /> CANCELAR
-        </button>
-        <span className="desc-hint">ctrl+enter pra salvar · esc pra cancelar</span>
-      </div>
-    </div>
-  )
-}
+// Edição de descrição agora é exclusivamente via modal (ícone ✏️ ao lado do título)
