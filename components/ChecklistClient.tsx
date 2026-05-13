@@ -602,7 +602,7 @@ export default function ChecklistClient({
                                       )}
                                    </div>
                                 </td>
-                                <td style={{ verticalAlign: 'top', padding: '16px 14px', minWidth: '400px' }}>
+                                <td className="desc-td">
                                   <DescricaoCell item={item} isAdmin={isAdmin} onSave={saveDescricao} renderReadOnly={renderFormattedText} />
                                 </td>
                                 <td style={{ verticalAlign: 'middle' }}>
@@ -710,9 +710,10 @@ export default function ChecklistClient({
         .table-header { padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); }
         .table-wrapper { overflow-x: auto; width: 100%; }
 
-        .t-v8 { width: 100%; border-collapse: collapse; min-width: 1200px; }
+        .t-v8 { width: 1370px; min-width: 1370px; border-collapse: collapse; table-layout: fixed; }
         .t-v8 th { background: rgba(0,0,0,0.4); padding: 18px 20px; font-size: 10px; color: #555; text-align: left; border-bottom: 2px solid #1a1a24; }
         .t-v8 td { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; word-break: break-word; vertical-align: middle; }
+        .t-v8 td.desc-td { padding: 16px 14px !important; min-width: 420px; width: 420px; vertical-align: top; }
         
         .n-pill { background: rgba(79, 124, 255, 0.1); border: 1px solid rgba(79, 124, 255, 0.2); width: 36px; height: 36px; border-radius: 12px; color: #4f7cff; font-weight: 900; display: flex; align-items: center; justify-content: center; margin: 0 auto; }
         .bold { font-weight: 800; color: #fff; }
@@ -798,16 +799,17 @@ function DescricaoCell({ item, isAdmin, onSave, renderReadOnly }: DescricaoCellP
   }
 
   if (!isAdmin) {
-    return <div style={{ color: '#9aa6bb', fontSize: 13, lineHeight: 1.65, textTransform: 'none', whiteSpace: 'pre-wrap', wordBreak: 'break-word', padding: '6px 2px' }}>{renderReadOnly(item.descricao)}</div>
+    return <div style={{ color: '#9aa6bb', fontSize: 13, lineHeight: 1.65, textTransform: 'none', whiteSpace: 'pre-wrap', wordBreak: 'break-word', padding: '6px 2px', minWidth: '380px' }}>{renderReadOnly(item.descricao)}</div>
   }
 
   return (
-    <div className="desc-cell">
+    <div className="desc-cell" style={{ minWidth: '380px', width: '100%' }}>
       <textarea
         className="desc-textarea"
         value={text}
         rows={5}
         placeholder="Cole links, observações ou detalhes desta turma..."
+        style={{ width: '100%', minWidth: '380px', minHeight: '130px', boxSizing: 'border-box', display: 'block' }}
         onChange={e => setText(e.target.value)}
         onKeyDown={e => {
           // Ctrl+Enter ou Cmd+Enter salva rapidinho
