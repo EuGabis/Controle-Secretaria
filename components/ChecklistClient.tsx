@@ -564,8 +564,8 @@ export default function ChecklistClient({
                              <th style={{ width: '60px', textAlign: 'center' }}>#</th>
                              <th style={{ width: '140px' }}>PRAZO</th>
                              <th style={{ width: '160px' }}>RESPONSÁVEL</th>
-                             <th style={{ width: '280px' }}>ETAPA DO PROCESSO</th>
-                             <th style={{ minWidth: '300px' }}>DESCRIÇÃO / LINKS</th>
+                             <th style={{ width: '260px' }}>ETAPA DO PROCESSO</th>
+                             <th style={{ minWidth: '420px', width: '420px' }}>DESCRIÇÃO / LINKS</th>
                              <th style={{ width: '150px' }}>DATA</th>
                              <th style={{ width: '180px' }}>SITUAÇÃO</th>
                           </tr>
@@ -602,7 +602,7 @@ export default function ChecklistClient({
                                       )}
                                    </div>
                                 </td>
-                                <td style={{ verticalAlign: 'middle', padding: '12px' }}>
+                                <td style={{ verticalAlign: 'top', padding: '16px 14px', minWidth: '400px' }}>
                                   <DescricaoCell item={item} isAdmin={isAdmin} onSave={saveDescricao} renderReadOnly={renderFormattedText} />
                                 </td>
                                 <td style={{ verticalAlign: 'middle' }}>
@@ -748,9 +748,11 @@ export default function ChecklistClient({
         .edit-btn:hover { color: #4f7cff; background: rgba(79,124,255,0.12); border-color: rgba(79,124,255,0.3); }
         .del-btn:hover { color: #ff4d6a; background: rgba(255,77,106,0.12); border-color: rgba(255,77,106,0.3); }
 
-        .desc-cell { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-        .desc-textarea { width: 100%; min-height: 60px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 10px; color: #b8c4d6; font-size: 12px; font-family: 'Inter', sans-serif; line-height: 1.5; resize: vertical; outline: none; text-transform: none; }
-        .desc-textarea:focus { border-color: rgba(79,124,255,0.4); background: rgba(0,0,0,0.4); }
+        .desc-cell { display: flex; flex-direction: column; gap: 8px; width: 100%; min-width: 380px; }
+        .desc-textarea { width: 100%; min-height: 130px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px 14px; color: #d4dceb; font-size: 13px; font-family: 'Inter', sans-serif; line-height: 1.65; resize: vertical; outline: none; text-transform: none; box-sizing: border-box; word-break: break-word; }
+        .desc-textarea::placeholder { color: #555; font-style: italic; }
+        .desc-textarea:hover { background: rgba(0,0,0,0.4); }
+        .desc-textarea:focus { border-color: rgba(79,124,255,0.4); background: rgba(0,0,0,0.45); box-shadow: 0 0 0 3px rgba(79,124,255,0.08); }
         .desc-save-inline { align-self: flex-start; display: flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #10d98c, #059669); color: #fff; border: none; border-radius: 8px; padding: 6px 12px; font-size: 10px; font-weight: 800; cursor: pointer; transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.04em; box-shadow: 0 2px 8px rgba(16,217,140,0.25); }
         .desc-save-inline:hover { box-shadow: 0 4px 14px rgba(16,217,140,0.4); transform: translateY(-1px); }
         .desc-save-inline:disabled { opacity: 0.55; cursor: not-allowed; }
@@ -796,7 +798,7 @@ function DescricaoCell({ item, isAdmin, onSave, renderReadOnly }: DescricaoCellP
   }
 
   if (!isAdmin) {
-    return <div style={{ color: '#777', fontSize: 12, lineHeight: 1.6, textTransform: 'none' }}>{renderReadOnly(item.descricao)}</div>
+    return <div style={{ color: '#9aa6bb', fontSize: 13, lineHeight: 1.65, textTransform: 'none', whiteSpace: 'pre-wrap', wordBreak: 'break-word', padding: '6px 2px' }}>{renderReadOnly(item.descricao)}</div>
   }
 
   return (
@@ -804,7 +806,7 @@ function DescricaoCell({ item, isAdmin, onSave, renderReadOnly }: DescricaoCellP
       <textarea
         className="desc-textarea"
         value={text}
-        rows={3}
+        rows={5}
         placeholder="Cole links, observações ou detalhes desta turma..."
         onChange={e => setText(e.target.value)}
         onKeyDown={e => {
