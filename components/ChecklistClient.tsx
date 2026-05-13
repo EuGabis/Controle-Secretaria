@@ -171,6 +171,7 @@ export default function ChecklistClient({
         turmaItens.filter(i => i.master_item_id).map(i => [i.master_item_id as string, i])
       )
 
+      // IMPORTANTE: 'descricao' NÃO é sincronizada — é texto livre exclusivo de cada turma
       const updates = masterItens
         .filter(m => turmaItensByMaster.has(m.id))
         .map(m => {
@@ -179,13 +180,14 @@ export default function ChecklistClient({
             titulo: m.titulo,
             contexto: m.contexto,
             responsavel: m.responsavel,
-            descricao: m.descricao,
             item_n: m.item_n,
             ordem: m.item_n,
             tipo_campo: m.tipo_campo
+            // descricao deliberadamente omitida — preserva edição local
           }).eq('id', local.id)
         })
 
+      // Etapas novas começam sem descricao — a turma personaliza depois
       const novos = masterItens
         .filter(m => !turmaItensByMaster.has(m.id))
         .map(m => ({
@@ -193,7 +195,6 @@ export default function ChecklistClient({
           titulo: m.titulo,
           contexto: m.contexto,
           responsavel: m.responsavel,
-          descricao: m.descricao,
           tipo_campo: m.tipo_campo,
           ordem: m.item_n,
           turma_id: turmaId,
@@ -282,8 +283,45 @@ export default function ChecklistClient({
                  </div>
 
                  <div className="f-group">
-                    <label>DETALHAMENTO E LINKS (TEXTO LIVRE)</label>
-                    <textarea className="inp-v8 desc-area" rows={6} value={editingItem.descricao || ''} onChange={e => setEditingItem({...editingItem, descricao: e.target.value})} placeholder="COLE LINKS OU OBSERVAÇÕES AQUI..." />
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                      <span>DETALHAMENTO E LINKS (TEXTO LIVRE)</span>
+                      <span style={{ fontSize: '9px', color: '#10d98c', fontWeight: '700', textTransform: 'none', letterSpacing: '0.02em' }}>
+                        💾 EXCLUSIVO DESTA TURMA — NÃO É SOBRESCRITO PELO SYNC
+                      </span>
+                    </label>
+                    <textarea
+                      className="inp-v8 desc-area"
+                      rows={6}
+                      value={editingItem.descricao || ''}
+                      onChange={e => setEditingItem({ ...editingItem, descricao: e.target.value })}
+                      placeholder="COLE LINKS OU OBSERVAÇÕES AQUI..."
+                    />
+                    <button
+                      className="btn-v8 save-desc-btn"
+                      disabled={saving === 'desc-save'}
+                      onClick={async () => {
+                        if (!editingItem) return
+                        setSaving('desc-save')
+                        try {
+                          const { data, error } = await supabase
+                            .from('checklist_itens')
+                            .update({ descricao: editingItem.descricao || null })
+                            .eq('id', editingItem.id)
+                            .select()
+                            .single()
+                          if (error) throw error
+                          if (data) {
+                            setItens(prev => prev.map(i => i.id === data.id ? { ...i, descricao: data.descricao } : i))
+                          }
+                        } catch (err: any) {
+                          alert('ERRO ao salvar descrição: ' + err.message)
+                        } finally {
+                          setSaving(null)
+                        }
+                      }}
+                    >
+                      {saving === 'desc-save' ? <><Loader2 size={14} className="spin" /> SALVANDO DESCRIÇÃO...</> : <><Save size={14} /> SALVAR APENAS A DESCRIÇÃO</>}
+                    </button>
                  </div>
               </div>
 
@@ -305,16 +343,15 @@ export default function ChecklistClient({
                       const { data, error } = await supabase.from('checklist_itens').update(updates).eq('id', editingItem.id).select().single()
                       if (error) throw error
 
-                      // 2. Se for MASTER, propagar edição para itens vinculados
+                      // 2. Se for MASTER, propagar edição para itens vinculados (exceto descricao, que é local de cada turma)
                       if (isMaster && data) {
                         await supabase.from('checklist_itens').update({
                            titulo: data.titulo,
                            contexto: data.contexto,
                            responsavel: data.responsavel,
-                           descricao: data.descricao,
                            item_n: data.item_n,
                            ordem: data.item_n
-                        }).eq('master_item_id', data.id) 
+                        }).eq('master_item_id', data.id)
                       }
 
                       if (data) {
@@ -579,6 +616,9 @@ export default function ChecklistClient({
 
         .btn-v8 { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 12px; font-size: 10px; font-weight: 800; cursor: pointer; border: none; }
         .primary-gradient { background: linear-gradient(135deg, #4f7cff, #8b5cf6); color: #fff; }
+        .save-desc-btn { background: linear-gradient(135deg, #10d98c, #059669); color: #fff; margin-top: 10px; align-self: flex-start; padding: 10px 16px; font-size: 11px; box-shadow: 0 4px 14px rgba(16,217,140,0.25); }
+        .save-desc-btn:hover { box-shadow: 0 6px 20px rgba(16,217,140,0.4); transform: translateY(-1px); }
+        .save-desc-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .overlay-v8 { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(25px); z-index: 9999; display: flex; align-items: center; justify-content: center; }
         .modal-v8 { width: 100%; max-width: 700px; border-radius: 32px; background: rgba(15, 15, 25, 0.98); border: 1px solid rgba(255,255,255,0.1); }
