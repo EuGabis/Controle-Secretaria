@@ -543,7 +543,7 @@ export default function ChecklistClient({
                          </span>
                        )}
                     </div>
-                    {!isImersao && turma.subtitulo && (
+                    {turma.subtitulo && (
                       <div className="turma-subtitulo">{turma.subtitulo}</div>
                     )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
@@ -582,20 +582,18 @@ export default function ChecklistClient({
                            )}
                          </div>
                        </div>
-                       {!isImersao && (
-                         <input
-                           key={`sub-${turma.id}-${turma.subtitulo ?? ''}`}
-                           className="h-v8-subtitulo"
-                           defaultValue={turma.subtitulo || ''}
-                           disabled={!isAdmin}
-                           placeholder={isAdmin ? 'SUBTÍTULO (OPCIONAL — ex: Início em 12/05/26 / Turma manhã / etc)' : ''}
-                           onBlur={e => {
-                             if ((e.target.value || '') !== (turma.subtitulo || '')) {
-                               saveHeader(turma.id, 'subtitulo', e.target.value)
-                             }
-                           }}
-                         />
-                       )}
+                       <input
+                         key={`sub-${turma.id}-${turma.subtitulo ?? ''}`}
+                         className="h-v8-subtitulo"
+                         defaultValue={turma.subtitulo || ''}
+                         disabled={!isAdmin}
+                         placeholder={isAdmin ? 'SUBTÍTULO (OPCIONAL — ex: Início em 12/05/26 / Turma manhã / etc)' : ''}
+                         onBlur={e => {
+                           if ((e.target.value || '') !== (turma.subtitulo || '')) {
+                             saveHeader(turma.id, 'subtitulo', e.target.value)
+                           }
+                         }}
+                       />
                     </div>
 
                     <div className="table-wrapper">
