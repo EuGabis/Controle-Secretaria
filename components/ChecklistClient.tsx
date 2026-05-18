@@ -3,13 +3,14 @@
 // v9.1 - CHECKLIST ULTIMATE (FRAMING & ALIGNMENT FIX) 📊
 // TUDO FUNCIONANDO, SINCRONIZADO E ENQUADRADO
 
-import { useState, useMemo } from 'react'
-import { ChecklistItem, ChecklistTurma, ChecklistResposta } from '@/lib/types'
+import { useState, useMemo, useEffect } from 'react'
+import { ChecklistItem, ChecklistTurma, ChecklistResposta, ChecklistTurmaComentario } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import {
   Plus, Trash2, Edit3, Save, Loader2, X, DatabaseZap,
   UploadCloud, FileSpreadsheet,
-  ExternalLink, RefreshCw, ListOrdered, Trash
+  ExternalLink, RefreshCw, ListOrdered, Trash,
+  MessageCircle, Send
 } from 'lucide-react'
 
 interface Props {
@@ -57,8 +58,106 @@ export default function ChecklistClient({
   const [isImporting, setIsImporting] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
 
+  // Comentários por turma
+  const [comentariosTurmaId, setComentariosTurmaId] = useState<string | null>(null)
+  const [comentarios, setComentarios] = useState<ChecklistTurmaComentario[]>([])
+  const [comentariosLoading, setComentariosLoading] = useState(false)
+  const [novoComentario, setNovoComentario] = useState('')
+  const [enviandoComentario, setEnviandoComentario] = useState(false)
+  const [comentariosCount, setComentariosCount] = useState<Record<string, number>>({})
+
   const isAdmin = perfil === 'admin' || perfil === 'master'
   const supabase = createClient()
+
+  // Buscar contagem de comentários de todas as turmas (uma vez)
+  useEffect(() => {
+    let cancelled = false
+    const fetchCounts = async () => {
+      const { data } = await supabase
+        .from('checklist_turma_comentarios')
+        .select('turma_id')
+      if (cancelled || !data) return
+      const counts: Record<string, number> = {}
+      data.forEach((c: { turma_id: string }) => {
+        counts[c.turma_id] = (counts[c.turma_id] || 0) + 1
+      })
+      setComentariosCount(counts)
+    }
+    fetchCounts()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const abrirComentarios = async (turmaId: string) => {
+    setComentariosTurmaId(turmaId)
+    setComentariosLoading(true)
+    setNovoComentario('')
+    const { data, error } = await supabase
+      .from('checklist_turma_comentarios')
+      .select('*')
+      .eq('turma_id', turmaId)
+      .order('created_at', { ascending: true })
+    setComentariosLoading(false)
+    if (error) {
+      alert('Erro ao carregar comentários: ' + error.message)
+      return
+    }
+    setComentarios(data || [])
+  }
+
+  const fecharComentarios = () => {
+    setComentariosTurmaId(null)
+    setComentarios([])
+    setNovoComentario('')
+  }
+
+  const enviarComentario = async () => {
+    if (!comentariosTurmaId || !novoComentario.trim()) return
+    setEnviandoComentario(true)
+    try {
+      // Pega o nome do autor do estado de usuários disponível (fallback para o id)
+      const { data: meProfile } = await supabase
+        .from('usuarios').select('nome').eq('id', usuarioId).single()
+      const autorNome = meProfile?.nome || null
+
+      const { data, error } = await supabase
+        .from('checklist_turma_comentarios')
+        .insert({
+          turma_id: comentariosTurmaId,
+          autor_id: usuarioId,
+          autor_nome: autorNome,
+          mensagem: novoComentario.trim()
+        })
+        .select()
+        .single()
+      if (error) throw error
+      if (data) {
+        setComentarios(prev => [...prev, data])
+        setComentariosCount(prev => ({ ...prev, [comentariosTurmaId]: (prev[comentariosTurmaId] || 0) + 1 }))
+        setNovoComentario('')
+      }
+    } catch (err: any) {
+      alert('Erro ao enviar: ' + (err?.message || err))
+    } finally {
+      setEnviandoComentario(false)
+    }
+  }
+
+  const apagarComentario = async (c: ChecklistTurmaComentario) => {
+    if (!confirm('Excluir este comentário?')) return
+    const { error } = await supabase.from('checklist_turma_comentarios').delete().eq('id', c.id)
+    if (error) { alert('Erro ao excluir: ' + error.message); return }
+    setComentarios(prev => prev.filter(x => x.id !== c.id))
+    setComentariosCount(prev => ({ ...prev, [c.turma_id]: Math.max(0, (prev[c.turma_id] || 0) - 1) }))
+  }
+
+  const formatarData = (iso: string) => {
+    try {
+      const d = new Date(iso)
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' +
+             d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    } catch { return iso }
+  }
 
   const handleCreateTurma = async () => {
     const nome = prompt('NOME DO NOVO CHECKLIST / TURMA:')
@@ -554,7 +653,21 @@ export default function ChecklistClient({
                     </div>
                   </div>
                 </div>
-                <Edit3 size={18} className="icon-expand" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <button
+                    type="button"
+                    className="btn-comentarios"
+                    onClick={e => { e.stopPropagation(); abrirComentarios(turma.id) }}
+                    title="Comentários desta turma"
+                  >
+                    <MessageCircle size={15} />
+                    Comentários
+                    {(comentariosCount[turma.id] || 0) > 0 && (
+                      <span className="com-badge">{comentariosCount[turma.id]}</span>
+                    )}
+                  </button>
+                  <Edit3 size={18} className="icon-expand" />
+                </div>
               </div>
 
               {isExpanded && (
@@ -744,6 +857,86 @@ export default function ChecklistClient({
         </div>
       )}
 
+      {/* MODAL COMENTÁRIOS DA TURMA */}
+      {comentariosTurmaId && (
+        <div className="overlay-v8" onClick={fecharComentarios}>
+          <div className="modal-v8 scale-in com-modal" onClick={e => e.stopPropagation()}>
+            <div className="m-h">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div className="modal-icon-header"><MessageCircle size={18} /></div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>COMENTÁRIOS</h3>
+                  <span style={{ fontSize: 11, color: '#888', textTransform: 'none' }}>
+                    {turmasState.find(t => t.id === comentariosTurmaId)?.nome || ''}
+                  </span>
+                </div>
+              </div>
+              <button onClick={fecharComentarios} className="close-x"><X size={20} /></button>
+            </div>
+
+            <div className="com-body">
+              {comentariosLoading && (
+                <div style={{ textAlign: 'center', padding: 30, color: '#666' }}>
+                  <Loader2 size={20} className="spin" /> Carregando...
+                </div>
+              )}
+              {!comentariosLoading && comentarios.length === 0 && (
+                <div className="com-empty">
+                  <MessageCircle size={28} color="#444" />
+                  <p>Nenhum comentário ainda.<br/>Seja o primeiro a comentar nesta turma.</p>
+                </div>
+              )}
+              {!comentariosLoading && comentarios.map(c => {
+                const isMine = c.autor_id === usuarioId
+                const podeApagar = isMine || isAdmin
+                return (
+                  <div key={c.id} className={`com-item ${isMine ? 'mine' : ''}`}>
+                    <div className="com-avatar">{(c.autor_nome || '?').charAt(0).toUpperCase()}</div>
+                    <div className="com-content">
+                      <div className="com-meta">
+                        <strong>{c.autor_nome || 'Usuário'}</strong>
+                        <span className="com-time">{formatarData(c.created_at)}</span>
+                        {podeApagar && (
+                          <button className="com-del" onClick={() => apagarComentario(c)} title="Excluir comentário">
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="com-msg">{c.mensagem}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="com-input-row">
+              <textarea
+                className="com-textarea"
+                placeholder="Escreva um comentário..."
+                value={novoComentario}
+                onChange={e => setNovoComentario(e.target.value)}
+                onKeyDown={e => {
+                  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault()
+                    enviarComentario()
+                  }
+                }}
+                rows={2}
+                disabled={enviandoComentario}
+              />
+              <button
+                className="com-send"
+                onClick={enviarComentario}
+                disabled={enviandoComentario || !novoComentario.trim()}
+                title="Enviar (Ctrl+Enter)"
+              >
+                {enviandoComentario ? <Loader2 size={14} className="spin" /> : <Send size={14} />}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
         .checklist-v9 { display: flex; flex-direction: column; gap: 20px; color: #fff; text-transform: uppercase; padding-bottom: 80px; font-family: 'Inter', sans-serif; }
         .glass { background: rgba(10, 10, 18, 0.96); backdrop-filter: blur(25px); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; }
@@ -766,6 +959,35 @@ export default function ChecklistClient({
         .status-dot.blue { background: #4f7cff; }
         .master-badge { background: rgba(255,204,0,0.1); color: #ffcc00; font-size: 9px; padding: 2px 8px; border-radius: 6px; margin-left: 8px; }
         .gap-badge { background: rgba(245,158,11,0.15); color: #f59e0b; font-size: 9px; font-weight: 800; padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(245,158,11,0.3); letter-spacing: 0.04em; }
+
+        /* Botão Comentários no header da turma */
+        .btn-comentarios { display: inline-flex; align-items: center; gap: 7px; background: linear-gradient(135deg, #4f7cff, #6366f1); color: #fff; border: none; border-radius: 10px; padding: 9px 16px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; box-shadow: 0 4px 12px rgba(79,124,255,0.25); font-family: 'Inter', sans-serif; letter-spacing: 0.01em; }
+        .btn-comentarios:hover { box-shadow: 0 6px 18px rgba(79,124,255,0.4); transform: translateY(-1px); }
+        .com-badge { background: rgba(255,255,255,0.25); color: #fff; font-size: 10px; font-weight: 900; padding: 2px 7px; border-radius: 10px; margin-left: 2px; min-width: 18px; text-align: center; }
+
+        /* Modal de comentários */
+        .com-modal { max-width: 600px; max-height: 80vh; display: flex; flex-direction: column; }
+        .com-body { flex: 1; overflow-y: auto; padding: 20px 30px; display: flex; flex-direction: column; gap: 14px; min-height: 200px; max-height: 50vh; text-transform: none; }
+        .com-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 20px; text-align: center; color: #666; font-size: 13px; }
+        .com-empty p { margin: 0; line-height: 1.5; }
+        .com-item { display: flex; gap: 12px; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; }
+        .com-item.mine { background: rgba(79,124,255,0.06); border-color: rgba(79,124,255,0.2); }
+        .com-avatar { flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #4f7cff, #8b5cf6); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 13px; }
+        .com-content { flex: 1; min-width: 0; }
+        .com-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 4px; }
+        .com-meta strong { color: #d4dceb; font-weight: 700; font-size: 12px; }
+        .com-time { color: #666; font-size: 10px; }
+        .com-del { margin-left: auto; background: transparent; border: none; color: #555; cursor: pointer; padding: 4px; border-radius: 4px; display: flex; transition: all 0.15s; }
+        .com-del:hover { color: #ff4d6a; background: rgba(255,77,106,0.1); }
+        .com-msg { color: #b8c4d6; font-size: 13px; line-height: 1.55; word-break: break-word; white-space: pre-wrap; }
+
+        .com-input-row { padding: 16px 24px 24px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; gap: 10px; align-items: flex-end; }
+        .com-textarea { flex: 1; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; color: #d4dceb; font-size: 13px; font-family: 'Inter', sans-serif; line-height: 1.5; resize: vertical; outline: none; text-transform: none; min-height: 44px; }
+        .com-textarea:focus { border-color: rgba(79,124,255,0.4); box-shadow: 0 0 0 3px rgba(79,124,255,0.08); }
+        .com-textarea::placeholder { color: #555; }
+        .com-send { width: 44px; height: 44px; border-radius: 10px; border: none; background: linear-gradient(135deg, #10d98c, #059669); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(16,217,140,0.3); transition: all 0.15s; }
+        .com-send:hover:not(:disabled) { box-shadow: 0 6px 18px rgba(16,217,140,0.5); transform: translateY(-1px); }
+        .com-send:disabled { opacity: 0.4; cursor: not-allowed; }
         .progress-pill { background: rgba(16, 217, 140, 0.1); color: #10d98c; font-size: 10px; padding: 4px 12px; border-radius: 8px; font-weight: 900; }
 
         .content-inner { padding: 0; background: rgba(0,0,0,0.2); border-radius: 0 0 20px 20px; overflow: hidden; }

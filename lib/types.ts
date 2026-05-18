@@ -134,3 +134,12 @@ export interface ChecklistResposta {
   updated_at: string
   autor?: Usuario
 }
+
+export interface ChecklistTurmaComentario {
+  id: string
+  turma_id: string
+  autor_id: string | null
+  autor_nome: string | null
+  mensagem: string
+  created_at: string
+}
