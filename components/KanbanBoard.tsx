@@ -297,11 +297,10 @@ export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, 
       // Se estava concluída e voltou para fazendo, resetamos para 50%
       newProgress = 50
     }
-    
+
     // Feature: 'Andar com a data' ao mover para 'Fazendo'
     let newDataLimite = tarefa.data_limite
     if (newStatus === 'fazendo') {
-      const hojeStr = new Date().toISOString().split('T')[0]
       // Se estiver atrasada ou sem data, damos 3 dias de prazo novo
       if (isAfter(new Date(), parseISO(tarefa.data_limite)) || !tarefa.data_limite) {
         const novaData = new Date()
@@ -310,24 +309,39 @@ export default function KanbanBoard({ tarefas: initialTarefas, isAdmin = false, 
       }
     }
 
-    await supabase.from('follow_up_log').insert({
+    // 1) Atualiza a tarefa (operação PRINCIPAL — sem ela, não muda nada)
+    const { data: updatedData, error: updateErr } = await supabase
+      .from('tarefas')
+      .update({
+        status: newStatus,
+        progresso: newProgress,
+        data_limite: newDataLimite
+      })
+      .eq('id', id)
+      .select()
+
+    if (updateErr) {
+      console.error('[Kanban] erro no UPDATE tarefas:', updateErr)
+      alert(`Não foi possível mover a tarefa: ${updateErr.message}\n\nProvável causa: RLS do Supabase bloqueando UPDATE em 'tarefas'. Rode a migração SQL informada no chat.`)
+      return
+    }
+
+    if (!updatedData || updatedData.length === 0) {
+      console.warn('[Kanban] UPDATE não afetou nenhuma linha — possivelmente RLS silencioso ou id inválido', { id, newStatus })
+      alert(`A tarefa não foi atualizada no banco (0 linhas afetadas).\nIsso geralmente é RLS bloqueando. Rode a migração SQL informada no chat.`)
+      return
+    }
+
+    // 2) Log de follow-up (best-effort — não bloqueia se falhar)
+    const { error: logErr } = await supabase.from('follow_up_log').insert({
       tarefa_id: id,
       usuario_id: tarefa.usuario_id,
       status_anterior: tarefa.status,
       status_novo: newStatus,
     })
+    if (logErr) console.warn('[Kanban] follow_up_log insert falhou (não-crítico):', logErr)
 
-    const { error } = await supabase.from('tarefas').update({ 
-      status: newStatus, 
-      progresso: newProgress,
-      data_limite: newDataLimite 
-    }).eq('id', id)
-
-    if (error) {
-      alert(`Erro ao alterar status da tarefa: ${error.message}\nVerifique as restrições (constraints) do seu banco Supabase.`)
-      return
-    }
-
+    // 3) Atualiza state local
     setTarefas(prev => prev.map(t =>
       t.id === id ? { ...t, status: newStatus, progresso: newProgress, data_limite: newDataLimite, ...(novaObs !== undefined ? { observacao: novaObs } : {}) } : t
     ))
