@@ -28,6 +28,29 @@ const CATEGORIA_MASTERS: Record<string, string> = {
   'encerramento': '00000000-0000-0000-0000-000000000002'
 }
 
+// Extrai mês e ano de strings como "ENCERRAMENTO - AGOSTO - 2027" ou "INÍCIO MAIO 2028"
+const MESES_PT: Record<string, number> = {
+  'JANEIRO': 1, 'FEVEREIRO': 2, 'MARCO': 3, 'MARÇO': 3,
+  'ABRIL': 4, 'MAIO': 5, 'JUNHO': 6, 'JULHO': 7,
+  'AGOSTO': 8, 'SETEMBRO': 9, 'OUTUBRO': 10,
+  'NOVEMBRO': 11, 'DEZEMBRO': 12
+}
+
+function extrairMesAno(nome: string): { mes: number; ano: number } | null {
+  if (!nome) return null
+  const up = nome.toUpperCase()
+  let mes: number | null = null
+  for (const m in MESES_PT) {
+    // \b não funciona bem com Ç/acentos; usa regex de borda manual
+    const re = new RegExp(`(^|[^A-ZÇ])${m}([^A-ZÇ]|$)`)
+    if (re.test(up)) { mes = MESES_PT[m]; break }
+  }
+  const yearMatch = up.match(/\b(19|20)\d{2}\b/)
+  const ano = yearMatch ? parseInt(yearMatch[0]) : null
+  if (mes && ano) return { mes, ano }
+  return null
+}
+
 export default function ChecklistClient({ 
   itens: initialItens, 
   turmas: initialTurmas, 
@@ -225,8 +248,25 @@ export default function ChecklistClient({
   const [turmasState, setTurmasState] = useState(initialTurmas)
 
   const filteredTurmas = useMemo(() => {
-    return turmasState.filter(t => (t.categoria || 'imersao') === categoria)
-  }, [turmasState, categoria])
+    const base = turmasState.filter(t => (t.categoria || 'imersao') === categoria)
+    if (categoria !== 'encerramento') return base
+
+    // Encerramento: ordena cronologicamente por ano + mês extraídos do nome.
+    // Master sempre primeiro; turmas sem padrão MES/ANO vão para o fim (ordenadas por nome).
+    return [...base].sort((a, b) => {
+      if (a.id === MASTER_ID) return -1
+      if (b.id === MASTER_ID) return 1
+      const da = extrairMesAno(a.nome)
+      const db = extrairMesAno(b.nome)
+      if (da && db) {
+        if (da.ano !== db.ano) return da.ano - db.ano
+        return da.mes - db.mes
+      }
+      if (da && !db) return -1
+      if (!da && db) return 1
+      return a.nome.localeCompare(b.nome)
+    })
+  }, [turmasState, categoria, MASTER_ID])
 
   const saveHeader = async (turmaId: string, field: 'nome' | 'descricao' | 'subtitulo', value: string) => {
     setSaving(`header-${turmaId}`);
