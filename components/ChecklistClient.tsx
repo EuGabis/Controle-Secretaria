@@ -4,6 +4,7 @@
 // TUDO FUNCIONANDO, SINCRONIZADO E ENQUADRADO
 
 import { useState, useMemo, useEffect } from 'react'
+// (DateCell usa useState e useEffect — já importados acima)
 import { ChecklistItem, ChecklistTurma, ChecklistResposta, ChecklistTurmaComentario } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -815,11 +816,9 @@ export default function ChecklistClient({
                                     : <span style={{ color: '#444', fontStyle: 'italic', fontSize: 12 }}>— sem descrição —</span>}
                                 </td>
                                 <td style={{ verticalAlign: 'middle' }}>
-                                  <input
-                                    type="date"
-                                    className="inp-v8 date-inp"
-                                    value={resp?.valor_data || ''}
-                                    onChange={e => performSave(item.id, turma.id, { valor_data: e.target.value })}
+                                  <DateCell
+                                    valor={resp?.valor_data || ''}
+                                    onSave={(val) => performSave(item.id, turma.id, { valor_data: val })}
                                   />
                                 </td>
                                 <td style={{ verticalAlign: 'middle' }}>
@@ -1097,3 +1096,59 @@ export default function ChecklistClient({
 }
 
 // Edição de descrição agora é exclusivamente via modal (ícone ✏️ ao lado do título)
+
+// =====================================================
+// Célula de data com estado local — evita salvar valores
+// parciais quando o usuário ainda está digitando o ano.
+// Só persiste quando o input perde o foco (onBlur) e
+// quando o valor é uma data válida (YYYY-MM-DD completa).
+// =====================================================
+interface DateCellProps {
+  valor: string
+  onSave: (val: string) => void
+}
+
+function DateCell({ valor, onSave }: DateCellProps) {
+  const [local, setLocal] = useState(valor || '')
+
+  // Sincroniza quando o valor "lá de fora" muda (ex: refetch)
+  useEffect(() => {
+    setLocal(valor || '')
+  }, [valor])
+
+  // Valida que está no formato YYYY-MM-DD com ano >= 1900 e <= 2999
+  const isValid = (val: string): boolean => {
+    if (!val) return true // vazio é válido (limpar)
+    const match = val.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (!match) return false
+    const ano = parseInt(match[1])
+    return ano >= 1900 && ano <= 2999
+  }
+
+  const handleBlur = () => {
+    if (local === valor) return
+    if (!isValid(local)) {
+      // valor inválido (ano parcial tipo "0002") — não salva, volta ao anterior
+      setLocal(valor || '')
+      return
+    }
+    onSave(local)
+  }
+
+  return (
+    <input
+      type="date"
+      className="inp-v8 date-inp"
+      value={local}
+      min="1900-01-01"
+      max="2999-12-31"
+      onChange={e => setLocal(e.target.value)}
+      onBlur={handleBlur}
+      onKeyDown={e => {
+        if (e.key === 'Enter') {
+          e.currentTarget.blur()
+        }
+      }}
+    />
+  )
+}
