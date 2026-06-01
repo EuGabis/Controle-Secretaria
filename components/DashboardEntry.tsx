@@ -13,17 +13,20 @@ interface Props {
  */
 export default function DashboardEntry({ children }: Props) {
   const [mounted, setMounted] = useState(false)
+  const [overlayGone, setOverlayGone] = useState(false)
 
   useEffect(() => {
     // Pequeno delay pra garantir que o DOM montou antes de animar
-    const t = setTimeout(() => setMounted(true), 30)
-    return () => clearTimeout(t)
+    const t1 = setTimeout(() => setMounted(true), 30)
+    // Após o fade-out completar (700ms), desmonta o overlay para não bloquear modais
+    const t2 = setTimeout(() => setOverlayGone(true), 900)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [])
 
   return (
     <div className={`dash-entry ${mounted ? 'mounted' : ''}`}>
-      {/* Overlay de fade-in inicial (escurece momentaneamente e some) */}
-      <div className="dash-fade-overlay" />
+      {/* Overlay de fade-in inicial — desmonta após animação para não bloquear modais */}
+      {!overlayGone && <div className="dash-fade-overlay" aria-hidden />}
       <div className="dash-content">{children}</div>
 
       <style jsx>{`
@@ -34,7 +37,7 @@ export default function DashboardEntry({ children }: Props) {
           inset: 0;
           background: #05060a;
           pointer-events: none;
-          z-index: 9998;
+          z-index: 40;            /* < z-index dos modais (50+) */
           opacity: 1;
           transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1);
         }
@@ -52,17 +55,6 @@ export default function DashboardEntry({ children }: Props) {
         .dash-entry.mounted .dash-content {
           opacity: 1;
           transform: translateY(0) scale(1);
-        }
-
-        /* Aplica stagger sutil em cards filhos quando existem */
-        :global(.dash-entry.mounted .glass),
-        :global(.dash-entry.mounted .kanban-col),
-        :global(.dash-entry.mounted .sidebar-link) {
-          animation: itemIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-        }
-        @keyframes itemIn {
-          from { opacity: 0; transform: translateY(8px); }
-          to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>
