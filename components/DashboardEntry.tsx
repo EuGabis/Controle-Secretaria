@@ -13,20 +13,26 @@ interface Props {
  */
 export default function DashboardEntry({ children }: Props) {
   const [mounted, setMounted] = useState(false)
-  const [overlayGone, setOverlayGone] = useState(false)
+  const [animationDone, setAnimationDone] = useState(false)
 
   useEffect(() => {
-    // Pequeno delay pra garantir que o DOM montou antes de animar
     const t1 = setTimeout(() => setMounted(true), 30)
-    // Após o fade-out completar (700ms), desmonta o overlay para não bloquear modais
-    const t2 = setTimeout(() => setOverlayGone(true), 900)
+    // Após a animação completar (~900ms), remove TUDO:
+    // - desmonta o overlay
+    // - limpa transform/opacity do conteúdo (transform quebra position:fixed dos modais)
+    const t2 = setTimeout(() => setAnimationDone(true), 900)
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [])
 
+  // Após animação terminar, renderiza direto sem wrapper de animação
+  // (assim transform/opacity ficam zerados — modais voltam a funcionar normal)
+  if (animationDone) {
+    return <>{children}</>
+  }
+
   return (
     <div className={`dash-entry ${mounted ? 'mounted' : ''}`}>
-      {/* Overlay de fade-in inicial — desmonta após animação para não bloquear modais */}
-      {!overlayGone && <div className="dash-fade-overlay" aria-hidden />}
+      <div className="dash-fade-overlay" aria-hidden />
       <div className="dash-content">{children}</div>
 
       <style jsx>{`
@@ -37,7 +43,7 @@ export default function DashboardEntry({ children }: Props) {
           inset: 0;
           background: #05060a;
           pointer-events: none;
-          z-index: 40;            /* < z-index dos modais (50+) */
+          z-index: 40;
           opacity: 1;
           transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1);
         }
