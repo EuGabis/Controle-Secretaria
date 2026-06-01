@@ -5,8 +5,20 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import {
   Lock, Mail, Eye, EyeOff, Loader2,
-  Shield, Sparkles, Activity, CheckCircle2, ArrowRight
+  Shield, Sparkles, Activity, CheckCircle2, ArrowRight,
+  ShieldCheck, Database, LayoutDashboard, Zap
 } from 'lucide-react'
+
+function Step({ done, active, icon, label }: { done: boolean; active: boolean; icon: React.ReactNode; label: string }) {
+  return (
+    <div className={`trans-step ${done ? 'done' : ''} ${active ? 'active' : ''}`}>
+      <div className="trans-step-icon">
+        {done && !active ? <CheckCircle2 size={14} /> : icon}
+      </div>
+      <span>{label}</span>
+    </div>
+  )
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -15,6 +27,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [transitioning, setTransitioning] = useState(false)
+  const [transitionStep, setTransitionStep] = useState(0)
   const [emailFocused, setEmailFocused] = useState(false)
   const [passFocused, setPassFocused] = useState(false)
   const [capsLock, setCapsLock] = useState(false)
@@ -51,10 +65,21 @@ export default function LoginPage() {
     }
 
     setSuccess(true)
+
+    // Inicia a sequência cinematográfica de transição
+    setTimeout(() => setTransitioning(true), 250)
+
+    // Steps animados (cada step ~500ms)
+    setTimeout(() => setTransitionStep(1), 700)   // Credenciais verificadas
+    setTimeout(() => setTransitionStep(2), 1300)  // Carregando seus dados
+    setTimeout(() => setTransitionStep(3), 1900)  // Preparando ambiente
+    setTimeout(() => setTransitionStep(4), 2500)  // Pronto!
+
+    // Navega após a animação completa
     setTimeout(() => {
       router.push('/dashboard')
       router.refresh()
-    }, 600)
+    }, 2900)
   }
 
   return (
@@ -240,6 +265,87 @@ export default function LoginPage() {
           🔐 Esta plataforma é restrita. Em caso de dúvidas, contate seu administrador.
         </div>
       </main>
+
+      {/* === OVERLAY DE TRANSIÇÃO PARA O DASHBOARD === */}
+      {transitioning && (
+        <div className="transition-overlay">
+          {/* Background com orbs mais intensos */}
+          <div className="trans-bg">
+            <div className="trans-orb trans-orb-1" />
+            <div className="trans-orb trans-orb-2" />
+            <div className="trans-orb trans-orb-3" />
+            <div className="trans-grid" />
+          </div>
+
+          {/* Conteúdo central */}
+          <div className="trans-content">
+            {/* Logo grande pulsante */}
+            <div className="trans-logo">
+              <div className="trans-logo-ring r1" />
+              <div className="trans-logo-ring r2" />
+              <div className="trans-logo-ring r3" />
+              <div className="trans-logo-core">
+                {transitionStep < 4
+                  ? <Loader2 size={32} className="spin" color="#fff" />
+                  : <CheckCircle2 size={32} color="#fff" />}
+              </div>
+            </div>
+
+            {/* Nome */}
+            <h2 className="trans-title">
+              <span className="gradient-text">Lito Academy</span>
+            </h2>
+            <p className="trans-sub">
+              {transitionStep === 0 && 'Inicializando…'}
+              {transitionStep === 1 && 'Credenciais verificadas'}
+              {transitionStep === 2 && 'Carregando seus dados'}
+              {transitionStep === 3 && 'Preparando ambiente'}
+              {transitionStep === 4 && 'Bem-vindo de volta!'}
+            </p>
+
+            {/* Barra de progresso */}
+            <div className="trans-progress">
+              <div
+                className="trans-progress-bar"
+                style={{ width: `${(transitionStep / 4) * 100}%` }}
+              />
+            </div>
+
+            {/* Steps */}
+            <div className="trans-steps">
+              <Step
+                done={transitionStep >= 1}
+                active={transitionStep === 1}
+                icon={<ShieldCheck size={14} />}
+                label="Autenticando"
+              />
+              <Step
+                done={transitionStep >= 2}
+                active={transitionStep === 2}
+                icon={<Database size={14} />}
+                label="Conectando"
+              />
+              <Step
+                done={transitionStep >= 3}
+                active={transitionStep === 3}
+                icon={<Zap size={14} />}
+                label="Sincronizando"
+              />
+              <Step
+                done={transitionStep >= 4}
+                active={transitionStep === 4}
+                icon={<LayoutDashboard size={14} />}
+                label="Acesso liberado"
+              />
+            </div>
+
+            {/* Hint da identidade */}
+            <div className="trans-hint">
+              Acessando como <strong>{email}</strong>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* === STYLES === */}
       <style jsx>{`
@@ -698,12 +804,225 @@ export default function LoginPage() {
           animation: appear 1s ease-out 0.4s both;
         }
 
+        /* ============ OVERLAY DE TRANSIÇÃO ============ */
+        .transition-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 9999;
+          background: rgba(5, 6, 10, 0.6);
+          backdrop-filter: blur(40px);
+          -webkit-backdrop-filter: blur(40px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: overlayIn 0.5s ease-out;
+        }
+        @keyframes overlayIn {
+          from { opacity: 0; backdrop-filter: blur(0); }
+          to   { opacity: 1; backdrop-filter: blur(40px); }
+        }
+
+        .trans-bg {
+          position: absolute; inset: 0;
+          pointer-events: none;
+        }
+        .trans-orb {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(100px);
+          opacity: 0.7;
+        }
+        .trans-orb-1 {
+          width: 600px; height: 600px;
+          background: radial-gradient(circle, #4f7cff, transparent 70%);
+          top: -150px; left: -100px;
+          animation: floatA 12s ease-in-out infinite;
+        }
+        .trans-orb-2 {
+          width: 700px; height: 700px;
+          background: radial-gradient(circle, #8b5cf6, transparent 70%);
+          bottom: -200px; right: -150px;
+          animation: floatB 15s ease-in-out infinite;
+        }
+        .trans-orb-3 {
+          width: 400px; height: 400px;
+          background: radial-gradient(circle, #06b6d4, transparent 70%);
+          top: 30%; right: 20%;
+          animation: floatC 18s ease-in-out infinite;
+          opacity: 0.4;
+        }
+        .trans-grid {
+          position: absolute; inset: 0;
+          background-image:
+            linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+          background-size: 50px 50px;
+          mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
+          -webkit-mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
+          animation: gridMove 20s linear infinite;
+        }
+        @keyframes gridMove {
+          from { background-position: 0 0; }
+          to   { background-position: 50px 50px; }
+        }
+
+        .trans-content {
+          position: relative;
+          z-index: 1;
+          text-align: center;
+          max-width: 440px;
+          padding: 0 24px;
+          animation: contentIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both;
+        }
+        @keyframes contentIn {
+          from { opacity: 0; transform: translateY(20px) scale(0.95); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* Logo grande com anéis em expansão */
+        .trans-logo {
+          position: relative;
+          width: 120px; height: 120px;
+          margin: 0 auto 28px;
+        }
+        .trans-logo-core {
+          position: absolute; inset: 24px;
+          background: linear-gradient(135deg, #4f7cff, #8b5cf6);
+          border-radius: 24px;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 20px 60px rgba(79,124,255,0.5);
+          z-index: 5;
+        }
+        .trans-logo-ring {
+          position: absolute; inset: 24px;
+          border: 2px solid rgba(79,124,255,0.5);
+          border-radius: 24px;
+          animation: bigRingPulse 2.5s ease-out infinite;
+        }
+        .trans-logo-ring.r2 { animation-delay: 0.8s; border-color: rgba(139,92,246,0.5); }
+        .trans-logo-ring.r3 { animation-delay: 1.6s; border-color: rgba(6,182,212,0.5); }
+        @keyframes bigRingPulse {
+          0%   { transform: scale(1);   opacity: 1; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
+
+        .trans-title {
+          font-size: 30px;
+          font-weight: 800;
+          margin: 0 0 8px;
+          letter-spacing: -0.02em;
+        }
+        .trans-sub {
+          color: #9aa6bb;
+          font-size: 14px;
+          margin: 0 0 28px;
+          min-height: 22px;
+          animation: subTextFade 0.4s ease-out;
+        }
+        @keyframes subTextFade {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Barra de progresso */
+        .trans-progress {
+          width: 100%;
+          height: 4px;
+          background: rgba(255,255,255,0.06);
+          border-radius: 999px;
+          overflow: hidden;
+          margin-bottom: 32px;
+        }
+        .trans-progress-bar {
+          height: 100%;
+          background: linear-gradient(90deg, #4f7cff, #8b5cf6, #06b6d4);
+          background-size: 200% 100%;
+          animation: progressShine 2s linear infinite;
+          border-radius: 999px;
+          transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 0 16px rgba(79,124,255,0.6);
+        }
+        @keyframes progressShine {
+          from { background-position: 0% 50%; }
+          to   { background-position: 200% 50%; }
+        }
+
+        /* Steps */
+        .trans-steps {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          margin-bottom: 24px;
+          text-align: left;
+        }
+        .trans-step {
+          display: flex; align-items: center; gap: 12px;
+          padding: 10px 14px;
+          background: rgba(255,255,255,0.02);
+          border: 1px solid rgba(255,255,255,0.04);
+          border-radius: 10px;
+          transition: all 0.4s ease;
+          opacity: 0.4;
+        }
+        .trans-step.done {
+          opacity: 1;
+          background: rgba(16,217,140,0.06);
+          border-color: rgba(16,217,140,0.2);
+        }
+        .trans-step.active {
+          opacity: 1;
+          background: rgba(79,124,255,0.08);
+          border-color: rgba(79,124,255,0.4);
+          box-shadow: 0 0 0 3px rgba(79,124,255,0.08);
+          transform: translateX(4px);
+        }
+        .trans-step-icon {
+          width: 24px; height: 24px;
+          display: flex; align-items: center; justify-content: center;
+          background: rgba(255,255,255,0.04);
+          border-radius: 6px;
+          color: #6b7589;
+          transition: all 0.3s;
+          flex-shrink: 0;
+        }
+        .trans-step.done .trans-step-icon {
+          background: rgba(16,217,140,0.2);
+          color: #10d98c;
+        }
+        .trans-step.active .trans-step-icon {
+          background: rgba(79,124,255,0.2);
+          color: #4f7cff;
+          animation: stepPulse 1s ease-in-out infinite;
+        }
+        @keyframes stepPulse {
+          0%,100% { transform: scale(1); }
+          50%     { transform: scale(1.1); }
+        }
+        .trans-step span {
+          font-size: 13px;
+          color: #9aa6bb;
+          font-weight: 600;
+        }
+        .trans-step.done span { color: #d4dceb; }
+        .trans-step.active span { color: #fff; }
+
+        .trans-hint {
+          font-size: 11px;
+          color: #6b7589;
+        }
+        .trans-hint strong {
+          color: #d4dceb;
+          font-weight: 600;
+        }
+
         /* Responsividade */
         @media (max-width: 480px) {
           .card { padding: 28px 24px 20px; }
           .brand-title { font-size: 22px; }
           .top-badges { flex-wrap: wrap; }
           .orb { filter: blur(60px); }
+          .trans-logo { width: 90px; height: 90px; }
+          .trans-title { font-size: 24px; }
         }
       `}</style>
     </div>
